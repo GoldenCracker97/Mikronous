@@ -35,8 +35,29 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1
 hp() { hermes -p "$PROFILE" "$@"; }   # profile-scoped hermes; works before ~/.local/bin is on PATH
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-need hermes
 need systemctl
+need curl
+
+# ---------------------------------------------------------------------------
+step "Hermes Agent"
+# Hermes is the brain; install it with its own installer when it is missing. --non-interactive skips
+# the stages that need input (model/provider setup, gateway wizard): Mikronous configures its own
+# profile below, so nothing is lost. MIKRONOUS_SKIP_HERMES_INSTALL=1 turns this off.
+export PATH="$HOME/.local/bin:$PATH"
+if command -v hermes >/dev/null 2>&1; then
+  echo "found: $(command -v hermes) ($(hermes --version 2>/dev/null | head -1 || echo version unknown))"
+elif [[ "${MIKRONOUS_SKIP_HERMES_INSTALL:-0}" == 1 ]]; then
+  echo "hermes not found and MIKRONOUS_SKIP_HERMES_INSTALL=1; install it: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash" >&2; exit 1
+else
+  echo "hermes not found; installing Hermes Agent (source install under ~/.hermes, launcher in ~/.local/bin)"
+  if curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive; then
+    hash -r
+    command -v hermes >/dev/null 2>&1 || { echo "Hermes installed but 'hermes' is not on PATH; open a new terminal and re-run scripts/install.sh" >&2; exit 1; }
+    echo "installed: $(command -v hermes)"
+  else
+    echo "Hermes installer failed; see ~/.hermes/logs/install.log, then re-run scripts/install.sh" >&2; exit 1
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 step "Hermes profile '$PROFILE'"
