@@ -5,7 +5,7 @@
 #   scripts/install.sh            # everything
 #   scripts/install.sh --no-model # skip model download / llama-server (already have one on :8081)
 #   scripts/install.sh --no-tray  # skip the tray app (PySide6) and the Meta+Space shortcut
-#   scripts/install.sh --voice    # also install local voice input/output (faster-whisper + Piper)
+#   scripts/install.sh --voice    # also install local voice input/output (faster-whisper + Piper); remembered for mik update
 #
 # Afterwards: `mik doctor` shows what is running.
 set -uo pipefail
@@ -19,13 +19,16 @@ UNIT_DIR="$HOME/.config/systemd/user"
 MODEL_FILE="${MIKRONOUS_MODEL_FILE:-Qwen3-4B-Instruct-2507-Q4_K_M.gguf}"
 WITH_MODEL=1
 WITH_TRAY=1
-WITH_VOICE="${MIKRONOUS_VOICE:-0}"
+# --voice is remembered (marker file) so `mik update`, which re-runs this script, keeps the voice extras.
+VOICE_MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/mikronous/voice.enabled"
+WITH_VOICE="${MIKRONOUS_VOICE:-$([[ -f "$VOICE_MARKER" ]] && echo 1 || echo 0)}"
 FAILURES=()
 for arg in "$@"; do
   case "$arg" in
     --no-model) WITH_MODEL=0 ;;
     --no-tray) WITH_TRAY=0 ;;
     --voice) WITH_VOICE=1 ;;
+    --no-voice) WITH_VOICE=0; rm -f "$VOICE_MARKER" ;;
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
@@ -157,7 +160,7 @@ install_mik_venv() {
 }
 # The tray app needs PySide6 (~150 MB); it is an optional extra so headless installs stay small.
 MIK_EXTRAS=""; [[ "$WITH_TRAY" == 1 ]] && MIK_EXTRAS="[tray]"
-[[ "$WITH_TRAY" == 1 && "$WITH_VOICE" == 1 ]] && MIK_EXTRAS="[tray,voice]"
+[[ "$WITH_TRAY" == 1 && "$WITH_VOICE" == 1 ]] && { MIK_EXTRAS="[tray,voice]"; mkdir -p "$(dirname "$VOICE_MARKER")"; touch "$VOICE_MARKER"; }
 if command -v uv >/dev/null 2>&1; then
   (cd "$REPO_DIR" && uv tool install --force --editable ".$MIK_EXTRAS" >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
 elif command -v pipx >/dev/null 2>&1; then
