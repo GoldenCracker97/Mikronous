@@ -1,0 +1,62 @@
+# Mikronous Hermes profile — installed to ~/.hermes/profiles/mikronous/config.yaml
+# Secrets (API_SERVER_KEY etc.) live in .env next to this file, never here.
+# Reference: https://github.com/NousResearch/hermes-agent/blob/main/cli-config.yaml.example
+
+# ---------------------------------------------------------------------------
+# Model: a llama-server we run ourselves on :8081 (systemd/mikronous-llama.service).
+# `mik model` (Phase 0.5) rewrites the llama-server flags to fit the hardware;
+# the model alias below stays stable so this file does not change.
+# ---------------------------------------------------------------------------
+model:
+  provider: llamacpp
+  default: mikronous-local
+
+providers:
+  llamacpp:
+    base_url: http://127.0.0.1:8081/v1
+    model: mikronous-local
+
+local_runtime:
+  enabled: false          # we manage llama-server via systemd, not Hermes
+  detect_ports: [8081]
+
+# ---------------------------------------------------------------------------
+# Full Hermes functionality. The API server (what the tray app talks to) gets
+# every toolset plus the mikronous desktop toolset from our plugin.
+# Tools that need API keys (image_gen, video, x_search) stay registered and
+# gate themselves at runtime.
+# ---------------------------------------------------------------------------
+platform_toolsets:
+  api_server: ["*", mikronous]
+  cli: ["*", mikronous]
+  cron: ["*", mikronous]
+
+# ---------------------------------------------------------------------------
+# Internet: keyless. DuckDuckGo for search (no key); page extraction falls back
+# to Hermes's keyless free-tier ring (Exa / Parallel / Firecrawl / Keenable).
+# Swap in SEARXNG_URL + `search_backend: searxng` for fully private search.
+# ---------------------------------------------------------------------------
+web:
+  search_backend: ddgs
+  keyless_fallback: true
+
+# ---------------------------------------------------------------------------
+# Long-term memory of the user (MEMORY.md + USER.md in this profile).
+# ---------------------------------------------------------------------------
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  nudge_interval: 10
+
+# Cron jobs (reminders) run on the same local model.
+cron:
+  model: mikronous-local
+  model_provider: llamacpp
+
+plugins:
+  enabled: [mikronous]
+
+# The mikronous platform (our plugin) is where cron reminders are delivered.
+platforms:
+  mikronous:
+    enabled: true

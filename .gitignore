@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Local state (never commit secrets or models)
+*.gguf
+.env
+*.env
+!profile/env.example
+!systemd/mikronous-llama.env.example
+
+# Editors
+.idea/
+.vscode/
+*.swp

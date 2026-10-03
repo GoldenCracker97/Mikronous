@@ -1,0 +1,29 @@
+[project]
+name = "mikronous"
+version = "0.1.0"
+description = "Local KDE Plasma desktop assistant powered by Hermes Agent and llama.cpp"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Tray app (Phase 3). Kept optional so headless installs stay small.
+tray = ["PySide6>=6.7"]
+# Hardware-fit tool (Phase 0.5) reads GGUF headers.
+model = ["gguf>=0.10"]
+
+[project.scripts]
+# `mikronous` is taken by the Hermes profile command (hermes profile create mikronous),
+# so the project's own CLI is `mik`.
+mik = "mikronous_cli.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mikronous_cli", "mikronous_tray", "mikronous_model"]

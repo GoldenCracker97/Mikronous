@@ -1,0 +1,21 @@
+[Unit]
+Description=Mikronous local model server (llama.cpp)
+Documentation=https://github.com/GoldenCracker97/Mikronous
+After=default.target
+
+[Service]
+Type=simple
+# All tunables live in the env file so `mik model` can rewrite them without touching the unit.
+EnvironmentFile=%h/.config/mikronous/llama.env
+ExecStart=/bin/sh -c 'exec "${LLAMA_SERVER}" --host 127.0.0.1 --port "${LLAMA_PORT}" \
+    -m "${LLAMA_MODEL}" --alias "${LLAMA_ALIAS}" \
+    -c "${LLAMA_CTX}" -ngl "${LLAMA_NGL}" -t "${LLAMA_THREADS}" \
+    -ctk "${LLAMA_KV_K}" -ctv "${LLAMA_KV_V}" -fa on --jinja \
+    --parallel "${LLAMA_PARALLEL}" ${LLAMA_EXTRA_ARGS}'
+Restart=on-failure
+RestartSec=3
+# Let the GPU process see the user's session (CUDA/Vulkan device nodes).
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target
