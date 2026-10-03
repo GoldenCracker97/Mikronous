@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 3 complete** — everything below works on a real Plasma 5.27 desktop: tray, `Meta+Space`, streaming chat, reminders in the window and as popups. Next: polish (approval card on a real gated command, docs, first-run checks).
+Status: **all phases complete** and verified on a real Plasma 5.27 desktop with an RTX 4070 Ti.
 
 ## What you get
 
@@ -59,6 +59,17 @@ host gateway, but that host did not load this profile's plugin in testing (no de
 reminder delivery), so the profile stays standalone. Your default profile's gateway is untouched.
 `mik doctor` prints the live endpoint.
 
+## Try it
+
+1. `mik doctor` — every row `ok`.
+2. `Win+Space` → "What can you do?" — a streamed answer from the local model.
+3. "Remind me in 1 minute to stretch." → a popup and a highlighted line in the window a minute later.
+4. "What do my documents say about <a word you know is in one of them>?" → `docs_search`, then the
+   file is read and named in the answer.
+5. "Create an empty file ~/t.txt, chmod 777 it, delete it." → with `approvals.mode: manual` an
+   approval card appears for the `chmod`.
+6. New chat tomorrow: "What is my name?" → answered from memory once you have told it.
+
 ## What leaves your machine
 
 | | |
@@ -99,6 +110,13 @@ and other cron output arrive in the window too (the plugin pushes them over
 The window talks to the same gateway as `mik ask`: `POST /v1/runs` plus the run's SSE event
 stream, with one Hermes session per chat (`New chat` in the tray menu starts another; the current
 one survives restarts via `~/.config/mikronous/tray.json` and is reloaded from the gateway).
+
+**Approvals.** When Hermes flags a command as dangerous (`rm -rf`, `chmod 777`, `sudo`, …) the window
+shows an approval card with the choices Hermes offers. The default mode is `smart`: a guardian pass
+on the local model lets clearly harmless flagged commands through and asks you about the rest, so
+you will not see a card for every `chmod`. `mikronous config set approvals.mode manual` asks every
+time; `mik doctor` and `scripts/install.sh` leave the setting alone unless you re-run the installer,
+which restores `smart`.
 
 Meta is the Windows key. The installer registers the shortcut in `~/.config/kglobalshortcutsrc`
 (Plasma ignores a `.desktop` file's `X-KDE-Shortcuts` until it is there) and restarts the shortcut

@@ -112,7 +112,43 @@ def run_checks() -> list[tuple[str, str, str]]:
     except Exception as exc:  # noqa: BLE001 - never let the privacy probe break doctor
         rows.append(("local-only", WARN, f"could not evaluate ({exc.__class__.__name__})"))
 
+    # 7. Desktop: tray running? global shortcut registered?
+    rows.append(("tray", OK if _tray_running() else WARN,
+                 "running (control socket answers)" if _tray_running() else "not running — start with `mik tray` (autostarts at login)"))
+    key = _shortcut_key()
+    rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
+                 else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
+
     return rows
+
+
+def _tray_running() -> bool:
+    """Qt places a QLocalServer named 'mikronous-tray' at $XDG_RUNTIME_DIR/mikronous-tray (or /tmp)."""
+    import socket
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    for path in (Path(runtime) / "mikronous-tray", Path("/tmp/mikronous-tray")):
+        if not path.exists():
+            continue
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(0.5)
+                s.connect(str(path))
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _shortcut_key() -> str:
+    """The key bound to mikronous.desktop in kglobalshortcutsrc (KF5 flat group or KF6 [services][...])."""
+    import re
+    try:
+        text = Path("~/.config/kglobalshortcutsrc").expanduser().read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(r"^\[(?:services\]\[)?mikronous\.desktop\]\n(?:.*\n)*?_launch=([^,\n]+)", text, re.MULTILINE)
+    key = m.group(1).strip() if m else ""
+    return "" if key.lower() in ("", "none") else key
 
 
 def main() -> int:

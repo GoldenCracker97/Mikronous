@@ -84,6 +84,16 @@ agent:
   # sees. The cron engine itself keeps running; `hermes cron` and /cron still work for you.
   disabled_toolsets: [connections, image_gen, video_gen, video, tts, x_search, vision, cronjob]
 
+# Dangerous-command approvals (terminal rm -rf, chmod 777, sudo, ...). In the tray these show up as an
+# approval card; in `mikronous chat` as a prompt.
+#   smart  - (default) a guardian pass on the local model auto-approves clearly low-risk flagged commands and
+#            asks you for the rest
+#   manual - ask for every flagged command
+#   off    - never ask (same as --yolo); not recommended
+# Change without editing this file: `mikronous config set approvals.mode manual` (install.sh resets it).
+approvals:
+  mode: smart
+
 # The mikronous platform (our plugin) is where cron reminders are delivered.
 platforms:
   mikronous:

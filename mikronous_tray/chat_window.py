@@ -108,6 +108,8 @@ class ChatWindow(QWidget):
         self._pending_approval: dict | None = None
         self._render_timer = QTimer(self, interval=60, singleShot=True)
         self._render_timer.timeout.connect(self._render)
+        self._stall_timer = QTimer(self, interval=90_000, singleShot=True)   # nothing arrived for 90 s
+        self._stall_timer.timeout.connect(lambda: self._set_status("still working… (Stop cancels this turn, Ctrl+N starts a clean chat)"))
 
         self.setWindowTitle("Mikronous")
         self.setWindowFlag(Qt.Dialog, True)   # keeps it out of the taskbar on most Plasma setups
@@ -258,6 +260,7 @@ class ChatWindow(QWidget):
     @Slot(str)
     def _on_delta(self, delta: str) -> None:
         self._streaming = (self._streaming or "") + delta
+        self._stall_timer.start()
         self._schedule_render()
 
     @Slot(str)
@@ -322,13 +325,18 @@ class ChatWindow(QWidget):
         else:
             if streamed:
                 self._add("assistant", streamed)
-            self._add("system", f"Error: {text}")
+            self._add("system", f"Error: {text.strip() or 'the run ended without a reply (see `mikronous gateway status`)'}")
+        self._stall_timer.stop()
         self._set_status("")
         self._schedule_render()
 
     # ------------------------------------------------------------------ misc
     def _set_status(self, text: str) -> None:
         self.status.setText(text)
+        if self._worker is not None and text and "still working" not in text:
+            self._stall_timer.start()      # any progress resets the stall hint
+        elif self._worker is None:
+            self._stall_timer.stop()
 
     def show_window(self) -> None:
         self.show()
