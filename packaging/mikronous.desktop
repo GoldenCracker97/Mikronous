@@ -9,3 +9,10 @@ Terminal=false
 Categories=Utility;
 StartupNotify=false
 X-KDE-Shortcuts=Meta+Space
+Actions=selection;
+
+[Desktop Action selection]
+Name=Mikronous: act on selected text
+Exec=mik selection
+Icon=mikronous
+X-KDE-Shortcuts=Meta+Shift+Space

@@ -58,6 +58,8 @@ CANT = {
     "gateway_restarted": "++ SETTINGS INSCRIBED · GATEWAY BACK ONLINE ++",
     "session_opened": "++ RITE RECALLED ++",
     "attached": "++ {n} FILE(S) PLACED ON THE SLATE · ASK AWAY ++",
+    "no_selection": "++ NOTHING IS SELECTED · HIGHLIGHT TEXT IN ANY APP, THEN PRESS THE SELECTION KEY ++",
+    "copied": "++ RITE COMPLETE · THE ANSWER IS ON THE CLIPBOARD ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}

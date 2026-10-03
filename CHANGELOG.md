@@ -22,6 +22,9 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
 - **Tray: drop files or folders** onto the window to attach their paths to the next message.
+- **Selected-text actions** (`Meta+Shift+Space`, Windows `Ctrl+Alt+Shift+Space`, `mik selection`): Explain, Summarise,
+  Rewrite, Translate, Ask about it; Rewrite/Translate answers land on the clipboard. Second Desktop Action in the
+  `.desktop` file and kglobalshortcutsrc; second `RegisterHotKey` on Windows; both keys in Settings.
 - **Routines** (Settings → Routines, tray menu, `mik routines`, `mik routine` CLI): scheduled agent tasks through the
   gateway's cron API with presets (morning briefing, watch a page, weekly notes review); pause, run now, edit, delete;
   reminders listed alongside.

@@ -1,6 +1,6 @@
 """The preferences behind the tray's Settings dialog, and where each one lives.
 
-tray.json (mikronous_tray.settings)          litany, keep_model, notes_dir, hotkey (Windows only)
+tray.json (mikronous_tray.settings)          litany, keep_model, notes_dir, translate_lang, hotkeys (Windows only)
 profile SOUL.md (mikronous_cli.voice)        voice: plain | light | full
 profile config.yaml (mikronous_cli.privacy)  approvals.mode, internet (web + browser toolsets)
 profile .env                                 MIKRONOUS_DOCS_DIRS (folders the file search indexes)
@@ -39,6 +39,8 @@ class Prefs:
     notes_dir: str = "~/Mikronous/notes"
     docs_dirs: str = "~/Documents"
     hotkey: str = "Ctrl+Alt+Space"
+    hotkey_selection: str = "Ctrl+Alt+Shift+Space"
+    translate_lang: str = "English"
 
     def changed_from(self, other: "Prefs") -> list[str]:
         return [f.name for f in fields(self) if getattr(self, f.name) != getattr(other, f.name)]
@@ -60,6 +62,8 @@ def read() -> Prefs:
     p.notes_dir = str(st.get("notes_dir") or Prefs.notes_dir)
     p.docs_dirs = read_env(PROFILE_ENV).get("MIKRONOUS_DOCS_DIRS") or Prefs.docs_dirs
     p.hotkey = str(st.get("hotkey") or Prefs.hotkey)
+    p.hotkey_selection = str(st.get("hotkey_selection") or Prefs.hotkey_selection)
+    p.translate_lang = str(st.get("translate_lang") or Prefs.translate_lang)
     return p
 
 
@@ -78,10 +82,10 @@ def hotkey_editable() -> bool:
     return IS_WINDOWS
 
 
-def kde_shortcut() -> str:
+def kde_shortcut(action: str = "_launch") -> str:
     try:
         from mikronous_cli.doctor import _shortcut_key
-        return _shortcut_key()
+        return _shortcut_key(action)
     except Exception:  # noqa: BLE001
         return ""
 
@@ -111,7 +115,8 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
         privacy.save_config(cfg)
     if "docs_dirs" in changed:
         _write_env_var(PROFILE_ENV, "MIKRONOUS_DOCS_DIRS", new.docs_dirs.strip())
-    tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey") if k in changed}
+    tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang")
+                    if k in changed}
     if tray_changes:
         settings.save(**tray_changes)
     return changed

@@ -184,6 +184,12 @@ checks GitHub and, when there are new commits, offers to pull, re-install and re
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
 
+**Selected text, anywhere.** Highlight text in any app and press `Meta+Shift+Space`
+(`Ctrl+Alt+Shift+Space` on Windows, `mik selection` from a script): a small menu offers *Explain*,
+*Summarise*, *Rewrite*, *Translate → <language from Settings>* and *Ask about it*. The answer streams
+into the slate; Rewrite and Translate also put it on the clipboard, ready to paste over the original.
+The key is set by the installer next to the main one (`MIKRONOUS_HOTKEY_SELECTION=…` to change it).
+
 **Drop files in.** Drag a file or folder from Dolphin (or Explorer) onto the window: its path is quoted
 into the message, and the assistant opens it directly, no search needed. Several at once work too.
 

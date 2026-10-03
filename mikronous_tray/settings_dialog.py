@@ -11,7 +11,7 @@ from . import prefs as P
 
 class SettingsDialog(QDialog):
     def __init__(self, parent: QWidget | None, current: P.Prefs, *, model: str = "", kde_shortcut: str = "",
-                 client=None):
+                 kde_shortcut_selection: str = "", client=None):
         super().__init__(parent, objectName="settings")
         self.setWindowTitle("Mikronous settings")
         self.setModal(True)
@@ -75,10 +75,19 @@ class SettingsDialog(QDialog):
             self.hotkey = QLineEdit(current.hotkey)
             self.hotkey.setPlaceholderText("Ctrl+Alt+Space")
             form.addRow("Hotkey", self.hotkey)
+            self.hotkey_selection = QLineEdit(current.hotkey_selection)
+            self.hotkey_selection.setPlaceholderText("Ctrl+Alt+Shift+Space")
+            form.addRow("Selection key", self.hotkey_selection)
         else:
             self.hotkey = None
+            self.hotkey_selection = None
             form.addRow("Hotkey", QLabel(kde_shortcut or "not set"))
-            form.addRow("", _hint("Change it in System Settings → Shortcuts → Mikronous (or re-run the installer with MIKRONOUS_HOTKEY)."))
+            form.addRow("Selection key", QLabel(kde_shortcut_selection or "not set"))
+            form.addRow("", _hint("Change them in System Settings → Shortcuts → Mikronous (or re-run the installer with "
+                                  "MIKRONOUS_HOTKEY / MIKRONOUS_HOTKEY_SELECTION)."))
+        self.translate_lang = QLineEdit(current.translate_lang)
+        form.addRow("Translate to", self.translate_lang)
+        form.addRow("", _hint("Select text anywhere, press the selection key: Explain · Summarise · Rewrite · Translate · Ask."))
         self.litany = QCheckBox("type out the boot litany when the slate first opens")
         self.litany.setChecked(current.litany)
         form.addRow("Litany", self.litany)
@@ -111,6 +120,9 @@ class SettingsDialog(QDialog):
             notes_dir=self.notes_dir.edit.text().strip() or self._initial.notes_dir,
             docs_dirs=self.docs_dirs.text().strip() or self._initial.docs_dirs,
             hotkey=(self.hotkey.text().strip() if self.hotkey is not None else self._initial.hotkey) or self._initial.hotkey,
+            hotkey_selection=(self.hotkey_selection.text().strip() if self.hotkey_selection is not None
+                              else self._initial.hotkey_selection) or self._initial.hotkey_selection,
+            translate_lang=self.translate_lang.text().strip() or self._initial.translate_lang,
         )
 
 

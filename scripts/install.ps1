@@ -17,7 +17,8 @@ param(
   [string]$LlamaBackend = "",      # cuda-13.4 | cuda-12.4 | vulkan | cpu (default: detect)
   [string]$LlamaTag = "",          # pin a llama.cpp nightly tag, e.g. b11146
   [string]$Voice = "full",         # plain | light | full (kept on re-runs)
-  [string]$Hotkey = "Ctrl+Alt+Space"
+  [string]$Hotkey = "Ctrl+Alt+Space",
+  [string]$HotkeySelection = "Ctrl+Alt+Shift+Space"
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -269,6 +270,7 @@ if (-not $NoTray -and $Mik) {
     $stateFile = Join-Path $ConfDir "tray.json"
     $state = if (Test-Path $stateFile) { Get-Content $stateFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
     $state | Add-Member -NotePropertyName hotkey -NotePropertyValue $Hotkey -Force
+    $state | Add-Member -NotePropertyName hotkey_selection -NotePropertyValue $HotkeySelection -Force
     $state | ConvertTo-Json | Set-Content $stateFile
     $pyw = Join-Path (Split-Path $Mik) "pythonw.exe"
     if (-not (Test-Path $pyw)) { $pyw = (Get-Command pythonw -ErrorAction SilentlyContinue).Source }
@@ -276,7 +278,7 @@ if (-not $NoTray -and $Mik) {
     New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Mikronous" -Value $cmd -PropertyType String -Force | Out-Null
     Write-Host "autostart: HKCU Run key -> $cmd"
     & $Mik show
-    Write-Host "tray started (look for the cog in the notification area; $Hotkey toggles the window)"
+    Write-Host "tray started (look for the cog in the notification area; $Hotkey toggles the window, $HotkeySelection acts on selected text)"
   } catch { Fail "tray step failed: $($_.Exception.Message); run: mik tray" }
 }
 

@@ -192,14 +192,15 @@ def _windows_autostart() -> bool:
         return False
 
 
-def _shortcut_key() -> str:
-    """The key bound to mikronous.desktop in kglobalshortcutsrc (KF5 flat group or KF6 [services][...])."""
+def _shortcut_key(action: str = "_launch") -> str:
+    """The key bound to mikronous.desktop (``_launch``) or one of its Desktop Actions (``selection``) in
+    kglobalshortcutsrc (KF5 flat group or KF6 [services][...])."""
     import re
     try:
         text = Path("~/.config/kglobalshortcutsrc").expanduser().read_text(encoding="utf-8")
     except OSError:
         return ""
-    m = re.search(r"^\[(?:services\]\[)?mikronous\.desktop\]\n(?:.*\n)*?_launch=([^,\n]+)", text, re.MULTILINE)
+    m = re.search(rf"^\[(?:services\]\[)?mikronous\.desktop\]\n(?:.*\n)*?{re.escape(action)}=([^,\n]+)", text, re.MULTILINE)
     key = m.group(1).strip() if m else ""
     return "" if key.lower() in ("", "none") else key
 

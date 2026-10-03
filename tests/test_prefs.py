@@ -34,9 +34,11 @@ def test_read_defaults(stores):
 def test_apply_writes_each_store(stores):
     old = prefs.read()
     new = prefs.Prefs(voice="light", approvals="manual", internet=False, litany=False, keep_model=True,
-                      notes_dir="~/Notes", docs_dirs="~/Docs, ~/Projects", hotkey="Ctrl+Shift+M")
+                      notes_dir="~/Notes", docs_dirs="~/Docs, ~/Projects", hotkey="Ctrl+Shift+M",
+                      hotkey_selection="Ctrl+Shift+S", translate_lang="German")
     changed = prefs.apply(old, new)
-    assert set(changed) == {"voice", "approvals", "internet", "litany", "keep_model", "notes_dir", "docs_dirs", "hotkey"}
+    assert set(changed) == {"voice", "approvals", "internet", "litany", "keep_model", "notes_dir", "docs_dirs", "hotkey",
+                            "hotkey_selection", "translate_lang"}
     assert prefs.needs_gateway_restart(changed) and not prefs.needs_gateway_restart(["voice", "litany"])
     assert voice.current(stores["soul"].read_text()) == "light" and stores["soul"].read_text().endswith("tail\n")
     assert (stores["cfg"].parent / "soul.sha").exists()

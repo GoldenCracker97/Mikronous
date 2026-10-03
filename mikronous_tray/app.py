@@ -133,11 +133,9 @@ class TrayApp(QObject):
 
         # Windows: register the global hotkey ourselves (KDE does it through kglobalshortcutsrc).
         self.hotkey = None
+        self.hotkey_selection = None
         if sys.platform == "win32":
-            from .winhotkey import WinHotkey
-            self.hotkey = WinHotkey(settings.load().get("hotkey", "Ctrl+Alt+Space"), self.window.toggle, app)
-            if not self.hotkey.ok:
-                print(f"mikronous-tray: could not register hotkey {self.hotkey.spec}: {self.hotkey.error}", file=sys.stderr)
+            self._register_hotkeys()
 
         # The model is loaded while the tray runs and unloaded when it quits.
         self.model = ModelService(self)
@@ -145,15 +143,26 @@ class TrayApp(QObject):
         self.model.ensure_loaded()
         self._model_state(self.model.state)
 
-    def _rebind_hotkey(self, spec: str) -> None:
+    def _register_hotkeys(self) -> None:
+        from .winhotkey import HOTKEY_ID, WinHotkey
+        st = settings.load()
+        self.hotkey = WinHotkey(st.get("hotkey", "Ctrl+Alt+Space"), self.window.toggle, self.app, HOTKEY_ID)
+        self.hotkey_selection = WinHotkey(st.get("hotkey_selection", "Ctrl+Alt+Shift+Space"), self.window.selection_menu,
+                                          self.app, HOTKEY_ID + 1)
+        for hk in (self.hotkey, self.hotkey_selection):
+            if not hk.ok:
+                print(f"mikronous-tray: could not register hotkey {hk.spec}: {hk.error}", file=sys.stderr)
+
+    def _rebind_hotkey(self, _spec: str) -> None:
         if sys.platform != "win32":
             return
-        from .winhotkey import WinHotkey
-        if self.hotkey:
-            self.hotkey.unregister()
-        self.hotkey = WinHotkey(spec, self.window.toggle, self.app)
-        if not self.hotkey.ok:
-            self.tray.showMessage("Mikronous", f"Could not register hotkey {spec}: {self.hotkey.error}", QSystemTrayIcon.Warning, 6000)
+        for hk in (self.hotkey, self.hotkey_selection):
+            if hk:
+                hk.unregister()
+        self._register_hotkeys()
+        for hk in (self.hotkey, self.hotkey_selection):
+            if hk and not hk.ok:
+                self.tray.showMessage("Mikronous", f"Could not register hotkey {hk.spec}: {hk.error}", QSystemTrayIcon.Warning, 6000)
 
     # ------------------------------------------------------------------ updates
     def check_updates(self, *, interactive: bool) -> None:
@@ -259,6 +268,8 @@ class TrayApp(QObject):
             elif cmd == "routines":
                 self.window.show_window()
                 self.window.open_settings("routines")
+            elif cmd == "selection":
+                self.window.selection_menu()
             elif cmd == "update":
                 self.window.show_window()
                 self.check_updates(interactive=True)
@@ -301,8 +312,9 @@ class TrayApp(QObject):
         self.tray.showMessage("Mikronous", text, QSystemTrayIcon.Information, 4000)
 
     def quit(self) -> None:
-        if self.hotkey:
-            self.hotkey.unregister()
+        for hk in (self.hotkey, self.hotkey_selection):
+            if hk:
+                hk.unregister()
         self.window.stop()
         if self.model.unload_on_quit():
             self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident

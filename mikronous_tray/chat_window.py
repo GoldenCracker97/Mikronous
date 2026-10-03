@@ -13,7 +13,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon, QKeyEvent, QKeySeq
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
                                QTextBrowser, QVBoxLayout, QWidget)
 
-from . import prefs, settings, theme
+from . import prefs, selection, settings, theme
 from .hermes_client import GatewayError, HermesClient, RunEvent
 from .sessions_pane import PANE_WIDTH, SessionsPane
 from .theme import APPROVAL_LABELS, CANT, TOKENS
@@ -156,6 +156,7 @@ class ChatWindow(QWidget):
         self._stall_timer.timeout.connect(lambda: self._set_status(CANT["stall"]))
         self._settings_thread: QThread | None = None
         self._update_state = "idle"
+        self._copy_next_answer = False
 
         self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
@@ -342,7 +343,8 @@ class ChatWindow(QWidget):
         if self._settings_thread is not None:
             return                                   # a previous save is still restarting the gateway
         old = prefs.read()
-        dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut(), client=self.client)
+        dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut(),
+                             kde_shortcut_selection=prefs.kde_shortcut("selection"), client=self.client)
         if tab == "routines" and dlg.routines is not None:
             dlg.tabs.setCurrentIndex(1)
         dlg.setStyleSheet(self.styleSheet())
@@ -357,7 +359,7 @@ class ChatWindow(QWidget):
             return
         if not changed:
             return
-        if "hotkey" in changed:
+        if "hotkey" in changed or "hotkey_selection" in changed:
             self.hotkey_changed.emit(new.hotkey)
         if prefs.needs_gateway_restart(changed):
             self._set_status(CANT["gateway_restarting"])
@@ -386,6 +388,39 @@ class ChatWindow(QWidget):
             self._add("system", f"++ GATEWAY DID NOT RETURN ++ {message}")
             self._set_status("")
         self._render()
+
+    # ------------------------------------------------------------------ selected-text actions
+    def selection_menu(self, text: str | None = None) -> None:
+        """Grab the highlighted text (or use ``text``) and offer the actions at the cursor."""
+        text = selection.grab_selection() if text is None else text
+        if not text or not text.strip():
+            self.show_window()
+            self._set_status(CANT["no_selection"])
+            return
+        from PySide6.QtGui import QCursor
+        from PySide6.QtWidgets import QMenu
+        lang = settings.load().get("translate_lang") or "English"
+        menu = QMenu()
+        menu.setStyleSheet(self.styleSheet())
+        for a in selection.ACTIONS:
+            menu.addAction(selection.label(a, lang), lambda a=a: self.run_selection_action(a.key, text))
+        menu.exec(QCursor.pos())
+
+    def run_selection_action(self, key: str, text: str) -> None:
+        a = selection.action(key)
+        lang = settings.load().get("translate_lang") or "English"
+        self.new_chat()
+        self.show_window()
+        if a.prompt is None:                       # "Ask about it": hand the text over, let the user type the question
+            self.input.setPlainText(selection.build_prompt(key, text) + "\n")
+            self.input.moveCursor(QTextCursor.End)
+            self.input.setFocus()
+            return
+        self._copy_next_answer = a.copy_result
+        self._add("user", f"{selection.label(a, lang)}: {text.strip()[:400]}{'…' if len(text.strip()) > 400 else ''}")
+        self._streaming = ""
+        self._schedule_render()
+        self._start_worker(selection.build_prompt(key, text, lang))
 
     # ------------------------------------------------------------------ update button
     def set_update_state(self, state: str, detail: str = "") -> None:
@@ -568,6 +603,9 @@ class ChatWindow(QWidget):
             if final:
                 self._add("assistant", final)
             self._set_status(CANT["complete"])
+            if self._copy_next_answer and final:
+                selection.set_clipboard(final)
+                self._set_status(CANT["copied"])
         elif status == "cancelled":
             if streamed:
                 self._add("assistant", streamed)
@@ -578,6 +616,7 @@ class ChatWindow(QWidget):
                 self._add("assistant", streamed)
             self._add("system", f"++ MALFUNCTION ++ {text.strip() or 'the rite ended without an answer (see `mikronous gateway status`)'}")
             self._set_status("")
+        self._copy_next_answer = False
         self._stall_timer.stop()
         self._render_timer.stop()
         self._render()                      # final state immediately, not on the next timer tick

@@ -343,3 +343,29 @@ def test_drop_paths_into_input(app, tmp_path):
     w.attach_paths(paths_from_mime(mime))
     assert w.input.toPlainText() == f'summarise this\n"{f}"\n' and "1 FILE" in w.status.text()
     assert w.input.acceptDrops() and w.view.viewport().acceptDrops()
+
+
+def test_selection_action_copies_result(app):
+    from PySide6.QtGui import QGuiApplication
+    from mikronous_tray.chat_window import ChatWindow
+
+    class PlainClient(FakeClient):
+        def events(self, run_id, should_stop=None):
+            yield RunEvent("message.delta", {"delta": "Translated."})
+            yield RunEvent("run.completed", {"output": "Translated."})
+
+    fc = PlainClient()
+    w = ChatWindow(fc)
+    sent = []
+    fc.start_run = lambda text, sid: (sent.append(text), "run1")[1]
+    QGuiApplication.clipboard().setText("old")
+    w.run_selection_action("translate", "Hola")
+    assert pump(app, lambda: w._worker is None, 15)
+    app.processEvents()
+    assert sent and sent[0].startswith("Translate the following into English.")
+    assert QGuiApplication.clipboard().text() == "Translated." and "CLIPBOARD" in w.status.text()
+    assert w.messages[0]["role"] == "user" and w.messages[0]["text"].startswith("Translate → English: Hola")
+    w.run_selection_action("ask", "some text")
+    assert w.input.toPlainText().startswith('"""\nsome text\n"""') and w._worker is None
+    w.selection_menu("")
+    assert "NOTHING IS SELECTED" in w.status.text()

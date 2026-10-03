@@ -19,6 +19,8 @@ DEFAULTS = {
     "window": {"width": 520, "height": 680},
     "notes_dir": os.environ.get("MIKRONOUS_NOTES_DIR", "~/Mikronous/notes"),
     "hotkey": "Ctrl+Alt+Space",     # Windows only; on KDE the shortcut lives in kglobalshortcutsrc
+    "hotkey_selection": "Ctrl+Alt+Shift+Space",   # Windows: selected-text actions (KDE: Meta+Shift+Space via installer)
+    "translate_lang": "English",    # target of the Translate action
     "litany": True,                 # boot litany on the first show after start (MIKRONOUS_NO_LITANY=1 overrides)
     "keep_model": False,            # keep llama-server loaded when the tray quits (MIKRONOUS_KEEP_MODEL=1 overrides)
     "sidebar": False,               # past-chats pane open
