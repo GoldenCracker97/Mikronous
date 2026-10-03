@@ -98,7 +98,7 @@ def paths_from_mime(mime) -> list[str]:
     """Local file/folder paths from a drag's mime data (file:// URLs), in drop order."""
     if not mime.hasUrls():
         return []
-    return [u.toLocalFile() for u in mime.urls() if u.isLocalFile() and u.toLocalFile()]
+    return [os.path.normpath(u.toLocalFile()) for u in mime.urls() if u.isLocalFile() and u.toLocalFile()]
 
 
 def quote_paths(paths: list[str]) -> str:
