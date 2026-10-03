@@ -257,10 +257,19 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; else KW=""; fi
       if [[ -n "$KW" ]]; then
         if ! grep -q "^_launch=$HOTKEY" <(sed -n '/^\[services\]\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null); then
-          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
-          systemctl --user restart plasma-kglobalaccel.service 2>/dev/null \
-            || { command -v kquitapp6 >/dev/null 2>&1 && kquitapp6 kglobalaccel >/dev/null 2>&1; } \
-            || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 kglobalaccel5 >/dev/null 2>&1; } || true
+          # The daemon writes its in-memory table to the file when it stops, so stop it BEFORE writing.
+          if systemctl --user is-active --quiet plasma-kglobalaccel.service 2>/dev/null; then
+            systemctl --user stop plasma-kglobalaccel.service; sleep 1
+            "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+            systemctl --user start plasma-kglobalaccel.service
+          else
+            { command -v kquitapp6 >/dev/null 2>&1 && kquitapp6 kglobalaccel >/dev/null 2>&1; } \
+              || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 kglobalaccel5 >/dev/null 2>&1; } || true
+            sleep 1
+            "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+            (command -v kglobalaccel6 >/dev/null 2>&1 && setsid kglobalaccel6 >/dev/null 2>&1 &) \
+              || (command -v kglobalaccel5 >/dev/null 2>&1 && setsid kglobalaccel5 >/dev/null 2>&1 &) || true
+          fi
         fi
         echo "shortcut: $HOTKEY opens the chat window (change in System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY=...)"
       else
