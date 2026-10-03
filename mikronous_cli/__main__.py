@@ -7,6 +7,7 @@ Subcommands:
   voice    Persona level: plain | light | full.
   tray     Run the tray app (chat window + hotkey target).
   toggle   Show/hide the tray chat window (starts the tray if needed).
+  settings Open the tray's Settings dialog.  chats: toggle the past-chats pane.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "voice":
         from . import voice
         return voice.main(argv[1:])
-    if argv and argv[0] in ("tray", "toggle", "show", "hide", "quit-tray"):
+    if argv and argv[0] in ("tray", "toggle", "show", "hide", "quit-tray", "settings", "chats"):
         from mikronous_tray.__main__ import main as tray_main
         return tray_main(argv[1:] if argv[0] == "tray" else ["quit" if argv[0] == "quit-tray" else argv[0]])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")

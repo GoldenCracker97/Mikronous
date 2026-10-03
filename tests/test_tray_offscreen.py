@@ -64,6 +64,17 @@ class FakeClient:
     def health(self):
         return {"data": []}
 
+    def list_sessions(self, limit=100):
+        return [{"id": "tray-20261003-aaaa", "title": "Reminder rites", "last_active": time.time() - 60, "message_count": 6},
+                {"id": "api-ask-1", "preview": "mik ask session"},
+                {"id": "tray-20260901-bbbb", "preview": "What devices are on my network?\nand more", "started_at": "2026-09-01T10:00:00"}]
+
+    def rename_session(self, sid, title):
+        self.renamed = (sid, title)
+
+    def delete_session(self, sid):
+        self.deleted = sid
+
     def close(self):
         pass
 
@@ -178,3 +189,74 @@ def test_model_service_systemd_flow(app, monkeypatch):
     svc.unload()
     assert ("stop", model_service.UNIT) in calls and svc.state == "unloaded"
     assert seen[:1] == ["waking"] or "waking" in seen
+
+
+def test_session_labels():
+    from mikronous_tray.sessions_pane import session_label
+    now = time.mktime((2026, 10, 3, 15, 0, 0, 0, 0, -1))
+    title, second = session_label({"title": "Hello", "last_active": now - 120, "message_count": 4}, now)
+    assert title == "Hello" and second == "today 14:58 · 4 msgs"
+    title, second = session_label({"preview": "x" * 80, "started_at": "2026-09-01T10:00:00"}, now)
+    assert title.endswith("…") and len(title) == 46 and second == "2026-09-01"
+    assert session_label({}, now) == ("(empty rite)", "")
+
+
+def test_sessions_pane_and_open(app):
+    from mikronous_tray import settings
+    from mikronous_tray.chat_window import ChatWindow
+    settings.save(session_id="tray-current", sidebar=False)
+    fc = FakeClient()
+    w = ChatWindow(fc)
+    w.resize(520, 600)
+    w.show()
+    assert not w.pane.isVisible()
+    w.toggle_sidebar()
+    assert w.pane.isVisible() and w.btn_chats.isChecked() and w.width() == 740
+    assert pump(app, lambda: w.pane.list.count() == 2, 5)
+    assert w.pane.session_ids() == ["tray-20261003-aaaa", "tray-20260901-bbbb"]      # mik ask sessions are hidden
+    assert w.pane.list.item(0).text().startswith("Reminder rites\ntoday") or "msgs" in w.pane.list.item(0).text()
+    w.pane._clicked(w.pane.list.item(1))
+    assert w.session_id == "tray-20260901-bbbb" and settings.load()["session_id"] == w.session_id
+    assert "earlier q" in w.view.toPlainText() and w.pane.list.currentRow() == 1
+    from mikronous_tray import sessions_pane
+    monkey = sessions_pane.QInputDialog.getText
+    sessions_pane.QInputDialog.getText = staticmethod(lambda *a, **k: ("Network rite", True))   # no modal dialog offscreen
+    try:
+        w.pane.rename("tray-20260901-bbbb", "What devices…")
+    finally:
+        sessions_pane.QInputDialog.getText = monkey
+    assert fc.renamed == ("tray-20260901-bbbb", "Network rite")
+    w.toggle_sidebar()
+    assert not w.pane.isVisible() and w.width() == 520 and settings.load()["sidebar"] is False
+    w.hide()
+
+
+def test_update_button_states(app):
+    from mikronous_tray.chat_window import ChatWindow
+    w = ChatWindow(FakeClient())
+    got = []
+    w.update_requested.connect(lambda: got.append(1))
+    w.btn_update.click()
+    assert got == [1]
+    w.set_update_state("checking")
+    assert not w.btn_update.isEnabled() and "FORGE" in w.status.text()
+    w.set_update_state("available", "2 new commit(s)")
+    assert w.btn_update.text() == "UPDATE •" and w.btn_update.property("alert") == "true" and "2 new commit(s)" in w.status.text()
+    w.set_update_state("current")
+    assert w.btn_update.text() == "UPDATE" and w.btn_update.isEnabled() and "LATEST" in w.status.text()
+
+
+def test_settings_dialog_values(app):
+    from mikronous_tray import prefs
+    from mikronous_tray.settings_dialog import SettingsDialog
+    cur = prefs.Prefs(voice="full", approvals="smart", internet=True, notes_dir="~/N", docs_dirs="~/D")
+    d = SettingsDialog(None, cur, model="Qwen3-8B-Q4_K_M", kde_shortcut="Meta+Space")
+    assert d.values() == cur
+    d.voice.setCurrentIndex(0)
+    d.approvals.setCurrentIndex(1)
+    d.internet.setChecked(False)
+    d.keep_model.setChecked(True)
+    d.docs_dirs.setText("~/Docs")
+    v = d.values()
+    assert (v.voice, v.approvals, v.internet, v.keep_model, v.docs_dirs) == ("plain", "manual", False, True, "~/Docs")
+    assert v.changed_from(cur) == ["voice", "approvals", "internet", "keep_model", "docs_dirs"]

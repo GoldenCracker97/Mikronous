@@ -1,4 +1,4 @@
-"""``python -m mikronous_tray [toggle|show|hide|new|quit]``: run the tray, or control a running one.
+"""``python -m mikronous_tray [toggle|show|hide|new|chats|settings|update|quit]``: run the tray, or control a running one.
 
 With no argument: start the tray (if one is already running, just show its window).
 ``toggle`` is what the Meta+Space shortcut (packaging/mikronous.desktop) runs: it starts the tray

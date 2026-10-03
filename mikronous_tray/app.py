@@ -6,10 +6,10 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtCore import QObject, Qt
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from . import settings
 from .chat_window import ChatWindow
@@ -36,6 +36,26 @@ def send_control(command: str) -> bool:
     sock.waitForBytesWritten(500)
     sock.disconnectFromServer()
     return True
+
+
+class UpdateChecker(QThread):
+    """`mik update --check` on a thread: fetches origin and reports {behind, commits, remote, error}."""
+    result = Signal(dict)
+
+    def run(self) -> None:
+        from mikronous_cli import update
+        try:
+            err = update.repo_ok()
+            if err:
+                self.result.emit({"error": err})
+                return
+            self.result.emit(update.status())
+        except Exception as exc:  # noqa: BLE001 - network or git trouble is reported, never raised
+            self.result.emit({"error": f"{exc.__class__.__name__}: {str(exc).strip()[-200:]}"})
+
+
+UPDATE_FIRST_CHECK_MS = 20_000
+UPDATE_RECHECK_MS = 6 * 3600 * 1000
 
 
 class TrayApp(QObject):
@@ -71,6 +91,12 @@ class TrayApp(QObject):
         a = QAction("New chat", menu)
         a.triggered.connect(lambda: (self.window.new_chat(), self.window.show_window()))
         menu.addAction(a)
+        a = QAction("Past chats", menu)
+        a.triggered.connect(lambda: (self.window.show_window(), self.window.toggle_sidebar(True)))
+        menu.addAction(a)
+        a = QAction("Settings…", menu)
+        a.triggered.connect(lambda: (self.window.show_window(), self.window.open_settings()))
+        menu.addAction(a)
         a = QAction("Open notes folder", menu)
         a.triggered.connect(self._open_notes)
         menu.addAction(a)
@@ -78,7 +104,7 @@ class TrayApp(QObject):
         a.triggered.connect(self._status)
         menu.addAction(a)
         a = QAction("Update Mikronous…", menu)
-        a.triggered.connect(self._update)
+        a.triggered.connect(lambda: self.check_updates(interactive=True))
         menu.addAction(a)
         menu.addSeparator()
         self.act_model = QAction("Unload model (free VRAM)", menu)
@@ -92,6 +118,15 @@ class TrayApp(QObject):
         self.tray.show()
         self._orig_show = self.window.show_window
         self.window.show_window = self._show_with_litany  # first show after start plays the litany
+        self.window.update_requested.connect(lambda: self.check_updates(interactive=True))
+        self.window.hotkey_changed.connect(self._rebind_hotkey)
+        self._checker: UpdateChecker | None = None
+        self._update_interactive = False
+        self._update_status: dict = {}
+        QTimer.singleShot(UPDATE_FIRST_CHECK_MS, lambda: self.check_updates(interactive=False))
+        self._recheck = QTimer(self, interval=UPDATE_RECHECK_MS)
+        self._recheck.timeout.connect(lambda: self.check_updates(interactive=False))
+        self._recheck.start()
 
         # Windows: register the global hotkey ourselves (KDE does it through kglobalshortcutsrc).
         self.hotkey = None
@@ -106,6 +141,70 @@ class TrayApp(QObject):
         self.model.state_changed.connect(self._model_state)
         self.model.ensure_loaded()
         self._model_state(self.model.state)
+
+    def _rebind_hotkey(self, spec: str) -> None:
+        if sys.platform != "win32":
+            return
+        from .winhotkey import WinHotkey
+        if self.hotkey:
+            self.hotkey.unregister()
+        self.hotkey = WinHotkey(spec, self.window.toggle, self.app)
+        if not self.hotkey.ok:
+            self.tray.showMessage("Mikronous", f"Could not register hotkey {spec}: {self.hotkey.error}", QSystemTrayIcon.Warning, 6000)
+
+    # ------------------------------------------------------------------ updates
+    def check_updates(self, *, interactive: bool) -> None:
+        """Fetch origin on a thread. Interactive (button/menu): report either way and offer to apply.
+        Background: only mark the UPDATE button when something new is on GitHub."""
+        if self._checker is not None and self._checker.isRunning():
+            self._update_interactive = self._update_interactive or interactive
+            return
+        if not interactive and self._update_status.get("behind"):
+            return                                              # already flagged; nothing to re-fetch
+        self._update_interactive = interactive
+        if interactive:
+            self.window.set_update_state("checking")
+        self._checker = UpdateChecker(self)
+        self._checker.result.connect(self._update_checked)
+        self._checker.start()
+
+    def _update_checked(self, st: dict) -> None:
+        self._update_status = st
+        interactive, self._update_interactive = self._update_interactive, False
+        if "error" in st:
+            if interactive:
+                self.window.set_update_state("failed", st["error"])
+            return
+        behind = int(st.get("behind") or 0)
+        if not behind:
+            if interactive:
+                self.window.set_update_state("current", f"Mikronous is at {st.get('local', '?')} on {st.get('branch', '?')}")
+            else:
+                self.window.set_update_state("idle")
+            return
+        summary = f"{behind} new commit(s)"
+        self.window.set_update_state("available", summary)
+        if st.get("dirty") or st.get("ahead"):
+            if interactive:
+                QMessageBox.information(self.window, "Mikronous update",
+                                        "There are new commits on GitHub, but this checkout has local changes or commits.\n"
+                                        "Run `mik update` in a terminal to see what blocks the fast-forward.")
+            return
+        if interactive:
+            self._offer_update(st)
+
+    def _offer_update(self, st: dict) -> None:
+        lines = "\n".join(f"  {c}" for c in (st.get("commits") or [])[:8])
+        more = "" if len(st.get("commits") or []) <= 8 else f"\n  … and {len(st['commits']) - 8} more"
+        box = QMessageBox(self.window)
+        box.setWindowTitle("Mikronous update")
+        box.setText(f"{st['behind']} new commit(s) on GitHub:\n{lines}{more}\n\nPull, re-install and restart the tray now?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Later)
+        box.setDefaultButton(QMessageBox.Yes)
+        box.setStyleSheet(self.window.styleSheet())
+        self.window.show_window()
+        if box.exec() == QMessageBox.Yes:
+            self._update()
 
     def _model_state(self, state: str) -> None:
         label = {"ready": "Unload model (free VRAM)", "waking": "Model is loading…", "unloaded": "Load model",
@@ -148,6 +247,15 @@ class TrayApp(QObject):
             elif cmd == "new":
                 self.window.new_chat()
                 self.window.show_window()
+            elif cmd == "chats":
+                self.window.show_window()
+                self.window.toggle_sidebar()
+            elif cmd == "settings":
+                self.window.show_window()
+                self.window.open_settings()
+            elif cmd == "update":
+                self.window.show_window()
+                self.check_updates(interactive=True)
             elif cmd == "quit":
                 self.quit()
 
@@ -171,7 +279,8 @@ class TrayApp(QObject):
         """Run `mik update` detached; it pulls, re-installs and restarts this tray by itself."""
         from mikronous_cli.platform import IS_WINDOWS, conf_dir
         log = conf_dir() / "update.log"
-        self.tray.showMessage("Mikronous", f"Checking GitHub for updates… (log: {log})", QSystemTrayIcon.Information, 4000)
+        self.window.set_update_state("running")
+        self.tray.showMessage("Mikronous", f"Updating… the tray restarts by itself (log: {log})", QSystemTrayIcon.Information, 4000)
         kwargs: dict = {"stdin": subprocess.DEVNULL}
         if IS_WINDOWS:
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

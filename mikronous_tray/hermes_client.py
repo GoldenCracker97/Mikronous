@@ -136,6 +136,20 @@ class HermesClient:
                 out.append({"role": role, "content": content})
         return out
 
+    def list_sessions(self, limit: int = 100) -> list[dict]:
+        """Persisted sessions, most recent first (``/api/sessions``). [] when the gateway is down."""
+        try:
+            data = self._json("GET", f"{self.api_root}/api/sessions", params={"limit": limit})
+        except GatewayError:
+            return []
+        return [s for s in (data.get("data") or []) if isinstance(s, dict) and s.get("id")]
+
+    def rename_session(self, session_id: str, title: str) -> None:
+        self._json("PATCH", f"{self.api_root}/api/sessions/{session_id}", json={"title": title})
+
+    def delete_session(self, session_id: str) -> None:
+        self._json("DELETE", f"{self.api_root}/api/sessions/{session_id}")
+
     def health(self) -> dict:
         try:
             return self._json("GET", f"{self.v1}/models")

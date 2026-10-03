@@ -13,8 +13,9 @@ from PySide6.QtGui import QIcon, QKeyEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
                                QTextBrowser, QVBoxLayout, QWidget)
 
-from . import settings, theme
+from . import prefs, settings, theme
 from .hermes_client import GatewayError, HermesClient, RunEvent
+from .sessions_pane import PANE_WIDTH, SessionsPane
 from .theme import APPROVAL_LABELS, CANT, TOKENS
 
 
@@ -97,6 +98,8 @@ class InputBox(QPlainTextEdit):
 # ------------------------------------------------------------------------------------- window
 class ChatWindow(QWidget):
     hidden_by_user = Signal()
+    update_requested = Signal()          # the UPDATE button; the tray app owns the checker
+    hotkey_changed = Signal(str)         # Windows: re-register after Settings
 
     def __init__(self, client: HermesClient):
         super().__init__()
@@ -114,6 +117,8 @@ class ChatWindow(QWidget):
         self._render_timer.timeout.connect(self._render)
         self._stall_timer = QTimer(self, interval=90_000, singleShot=True)   # nothing arrived for 90 s
         self._stall_timer.timeout.connect(lambda: self._set_status(CANT["stall"]))
+        self._settings_thread: QThread | None = None
+        self._update_state = "idle"
 
         self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
@@ -126,10 +131,14 @@ class ChatWindow(QWidget):
         self.setStyleSheet(theme.stylesheet(self.fonts))
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.hide_window)
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.new_chat)
+        QShortcut(QKeySequence("Ctrl+H"), self, activated=self.toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+,"), self, activated=self.open_settings)
         if self.session_id:
             self._load_history()
         else:
             self.new_chat()
+        if self.state.get("sidebar"):
+            self.toggle_sidebar(True, resize=False)
 
     # ------------------------------------------------------------------ ui
     def _build(self) -> None:
@@ -148,12 +157,36 @@ class ChatWindow(QWidget):
         hl.addStretch(1)
         self.model_label = QLabel(_model_name(), objectName="model")
         hl.addWidget(self.model_label)
+        hl.addSpacing(10)
+        self.btn_chats = QPushButton("CHATS", objectName="hbtn")
+        self.btn_chats.setCheckable(True)
+        self.btn_chats.setToolTip("Past chats (Ctrl+H)")
+        self.btn_chats.clicked.connect(lambda checked: self.toggle_sidebar(checked))
+        hl.addWidget(self.btn_chats)
+        self.btn_settings = QPushButton("SETTINGS", objectName="hbtn")
+        self.btn_settings.setToolTip("Settings (Ctrl+,)")
+        self.btn_settings.clicked.connect(self.open_settings)
+        hl.addWidget(self.btn_settings)
+        self.btn_update = QPushButton("UPDATE", objectName="hbtn")
+        self.btn_update.setToolTip("Check GitHub for a newer Mikronous")
+        self.btn_update.clicked.connect(self.update_requested.emit)
+        hl.addWidget(self.btn_update)
         root.addWidget(header)
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        root.addLayout(body, 1)
+        self.pane = SessionsPane(self.client)
+        self.pane.open_session.connect(self.open_session)
+        self.pane.new_chat.connect(self.new_chat)
+        self.pane.hide()
+        body.addWidget(self.pane)
 
         inner = QVBoxLayout()
         inner.setContentsMargins(10, 8, 10, 10)
         inner.setSpacing(8)
-        root.addLayout(inner, 1)
+        body.addLayout(inner, 1)
 
         self.view = QTextBrowser(objectName="view")
         self.view.setOpenExternalLinks(True)
@@ -221,6 +254,7 @@ class ChatWindow(QWidget):
             self.messages.append({"role": m["role"], "text": m["content"]})
         self._render()
         self._set_status(CANT["session"])
+        self.pane.set_current(self.session_id)
 
     def new_chat(self) -> None:
         if self._worker:
@@ -232,6 +266,99 @@ class ChatWindow(QWidget):
         self._streaming = None
         self._render()
         self._set_status(CANT["new"])
+        self.pane.set_current(self.session_id)
+
+    # ------------------------------------------------------------------ past chats
+    def toggle_sidebar(self, show: bool | None = None, *, resize: bool = True) -> None:
+        show = not self.pane.isVisible() if show is None else bool(show)
+        if show == self.pane.isVisible():
+            self.btn_chats.setChecked(show)
+            return
+        if resize and self.isVisible():
+            self.resize(self.width() + (PANE_WIDTH if show else -PANE_WIDTH), self.height())
+        self.pane.setVisible(show)
+        self.btn_chats.setChecked(show)
+        settings.save(sidebar=show)
+        if show:
+            self.pane.refresh()
+
+    def open_session(self, session_id: str) -> None:
+        """Switch the slate to an earlier chat; history comes from the gateway."""
+        if not session_id or session_id == self.session_id:
+            return
+        if self._worker:
+            self.stop()
+        self.session_id = session_id
+        settings.save(session_id=session_id)
+        self.messages = []
+        self._streaming = None
+        self._load_history()
+        self._set_status(CANT["session_opened"])
+        self.input.setFocus()
+
+    # ------------------------------------------------------------------ settings
+    def open_settings(self) -> None:
+        from .settings_dialog import SettingsDialog
+        if self._settings_thread is not None:
+            return                                   # a previous save is still restarting the gateway
+        old = prefs.read()
+        dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut())
+        dlg.setStyleSheet(self.styleSheet())
+        if dlg.exec() != SettingsDialog.Accepted:
+            return
+        new = dlg.values()
+        try:
+            changed = prefs.apply(old, new)
+        except (ValueError, OSError) as exc:
+            self._add("system", f"++ SETTINGS NOT INSCRIBED ++ {exc}")
+            self._render()
+            return
+        if not changed:
+            return
+        if "hotkey" in changed:
+            self.hotkey_changed.emit(new.hotkey)
+        if prefs.needs_gateway_restart(changed):
+            self._set_status(CANT["gateway_restarting"])
+            self._restart_gateway_async()
+        else:
+            self._set_status(CANT["settings_saved"])
+
+    def _restart_gateway_async(self) -> None:
+        worker = _GatewayRestart()
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.done.connect(self._on_gateway_restarted)
+        worker.done.connect(thread.quit)
+        thread.finished.connect(lambda: setattr(self, "_settings_thread", None))
+        thread.finished.connect(thread.deleteLater)
+        self._settings_thread = thread
+        self._gateway_worker = worker                # keep a reference while the thread runs
+        thread.start()
+
+    @Slot(bool, str)
+    def _on_gateway_restarted(self, ok: bool, message: str) -> None:
+        if ok:
+            self._set_status(CANT["gateway_restarted"])
+        else:
+            self._add("system", f"++ GATEWAY DID NOT RETURN ++ {message}")
+            self._set_status("")
+        self._render()
+
+    # ------------------------------------------------------------------ update button
+    def set_update_state(self, state: str, detail: str = "") -> None:
+        """idle | checking | current | available | failed | running — drives the UPDATE button and status line."""
+        self._update_state = state
+        alert = state == "available"
+        self.btn_update.setText("UPDATE •" if alert else "UPDATE")
+        self.btn_update.setProperty("alert", "true" if alert else "false")
+        self.btn_update.style().unpolish(self.btn_update)
+        self.btn_update.style().polish(self.btn_update)
+        self.btn_update.setEnabled(state not in ("checking", "running"))
+        self.btn_update.setToolTip(detail or "Check GitHub for a newer Mikronous")
+        cant = CANT.get(f"update_{state}")
+        if cant and self._worker is None:
+            self._set_status(cant + (f" · {detail}" if detail and state in ("available", "failed") else ""))
 
     def show_inbox_message(self, payload: dict) -> None:
         title = payload.get("title") or "Mikronous"
@@ -390,6 +517,8 @@ class ChatWindow(QWidget):
         self._stall_timer.stop()
         self._render_timer.stop()
         self._render()                      # final state immediately, not on the next timer tick
+        if self.pane.isVisible():
+            self.pane.refresh()             # a first answer makes the session appear in the list
 
     def set_model_state(self, state: str) -> None:
         """Called by the tray: reflect the llama-server state when no turn is running."""
@@ -428,14 +557,17 @@ class ChatWindow(QWidget):
         self.hide_window()
 
 
+class _GatewayRestart(QObject):
+    done = Signal(bool, str)
+
+    @Slot()
+    def run(self) -> None:
+        ok, msg = prefs.restart_gateway()
+        self.done.emit(ok, msg)
+
+
 def _model_name() -> str:
-    """Basename of the loaded GGUF, from the llama-server env file (no network)."""
-    try:
-        from mikronous_cli.paths import LLAMA_ENV, read_env
-        model = read_env(LLAMA_ENV).get("LLAMA_MODEL", "")
-        return Path(model).stem if model else ""
-    except Exception:  # noqa: BLE001
-        return ""
+    return prefs.model_name()
 
 
 def _cell(inner: str, *, bg: str, border: str, align: str = "left", indent_left: int = 0, indent_right: int = 0,

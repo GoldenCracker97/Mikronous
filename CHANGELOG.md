@@ -14,6 +14,16 @@ All notable changes to Mikronous are recorded here. The format follows
   (Hermes's built-in tools once `HASS_URL`/`HASS_TOKEN` are set), `api-calls`, `skill-authoring` (offer to save
   taught procedures with `skill_manage`).
 - `mik doctor`: Home Assistant row when configured. `mik privacy`: service keys listed separately from provider keys.
+- **Tray: past-chats pane** (`CHATS` button, `Ctrl+H`, `mik chats`): earlier tray sessions from the gateway, open,
+  rename or delete them.
+- **Tray: Settings dialog** (`SETTINGS` button, `Ctrl+,`, `mik settings`, tray menu): voice, approval mode, internet
+  on/off, notes folder, file-search folders, boot litany, keep-model-on-quit, Windows hotkey. Gateway-side changes
+  restart the gateway automatically.
+- **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
+  button when new commits exist.
+
+### Fixed
+- `lan_devices` crashed on IPv6 neighbours in `ip neigh` output.
 
 ## [0.1.1] - 2026-10-03
 

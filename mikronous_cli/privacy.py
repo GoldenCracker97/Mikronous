@@ -116,11 +116,13 @@ def cmd_status() -> int:
     return 0 if not bad else 1
 
 
-def _set_online(online: bool) -> int:
-    cfg = load_config()
-    if not cfg:
-        print(f"no config at {CONFIG}; run scripts/install.sh", file=sys.stderr)
-        return 1
+def is_online(cfg: dict) -> bool:
+    disabled = ((cfg.get("agent") or {}).get("disabled_toolsets") or [])
+    return not any(t in disabled for t in INTERNET_TOOLSETS)
+
+
+def apply_online(cfg: dict, online: bool) -> dict:
+    """Enable/disable the web + browser toolsets and the keyless search ring in a loaded config (no I/O)."""
     agent = cfg.setdefault("agent", {}) or {}
     cfg["agent"] = agent
     disabled = list(agent.get("disabled_toolsets") or [])
@@ -132,7 +134,15 @@ def _set_online(online: bool) -> int:
     web = cfg.setdefault("web", {}) or {}
     cfg["web"] = web
     web["keyless_fallback"] = bool(online)
-    save_config(cfg)
+    return cfg
+
+
+def _set_online(online: bool) -> int:
+    cfg = load_config()
+    if not cfg:
+        print(f"no config at {CONFIG}; run scripts/install.sh", file=sys.stderr)
+        return 1
+    save_config(apply_online(cfg, online))
     print(("online: web + browser enabled, keyless free-tier search on" if online
            else "offline: web + browser disabled, keyless free-tier search off"))
     print("(scripts/install.sh resets this to the repo default; run `mik privacy offline` again after a reinstall)")

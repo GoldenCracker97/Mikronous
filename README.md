@@ -154,6 +154,7 @@ please report what breaks.
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
 | `mik voice [plain\|light\|full]` | How much machine-priest the assistant speaks |
+| `mik settings` / `mik chats` | Open the tray's Settings dialog / toggle the past-chats pane |
 | `mik model start\|stop\|restart` | Start or stop the model server by hand (systemd on Linux, a background process on Windows) |
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
@@ -171,6 +172,16 @@ and other cron output arrive in the window too (the plugin pushes them over
 The window talks to the same gateway as `mik ask`: `POST /v1/runs` plus the run's SSE event
 stream, with one Hermes session per chat (`New chat` in the tray menu starts another; the current
 one survives restarts via `~/.config/mikronous/tray.json` and is reloaded from the gateway).
+
+**Header buttons.** `CHATS` (`Ctrl+H`) opens the past-chats pane: every earlier tray chat from the
+gateway's session store, newest first; click one to continue it, right-click to rename or delete it.
+`SETTINGS` (`Ctrl+,`) opens a dialog for the things people actually change: voice level, approval
+mode, internet on/off, notes folder, the folders the file search indexes, the boot litany, whether the
+model stays loaded on Quit, and on Windows the hotkey. Changes that the gateway reads at start
+(approvals, internet, file-search folders) restart it for you; the status line says so. `UPDATE`
+checks GitHub and, when there are new commits, offers to pull, re-install and restart the tray (the
+same as `mik update`). The tray also checks quietly in the background and marks the button
+`UPDATE •` when something is new; it never installs anything without being asked.
 
 **Model lifecycle.** The tray owns the model: it starts `mikronous-llama.service` when it launches
 (the status line reads "the cogitator wakes" until the first answer is possible) and stops it on

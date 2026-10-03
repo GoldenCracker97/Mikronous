@@ -48,6 +48,15 @@ CANT = {
     "model_waking": "++ THE COGITATOR WAKES · THE FIRST ANSWER MAY TAKE A MOMENT ++",
     "model_ready": "++ COGITATOR READY ++",
     "model_unloaded": "++ COGITATOR DORMANT · LOAD IT FROM THE TRAY MENU ++",
+    "update_checking": "++ CONSULTING THE FORGE FOR NEW RITES ++",
+    "update_current": "++ NO NEW RITES · THIS IS THE LATEST ++",
+    "update_available": "++ NEW RITES AWAIT AT THE FORGE · PRESS UPDATE ++",
+    "update_failed": "++ THE FORGE DID NOT ANSWER ++",
+    "update_running": "++ REFORGING · THE SLATE WILL RETURN BY ITSELF ++",
+    "settings_saved": "++ SETTINGS INSCRIBED ++",
+    "gateway_restarting": "++ GATEWAY REFORGING · A MOMENT ++",
+    "gateway_restarted": "++ SETTINGS INSCRIBED · GATEWAY BACK ONLINE ++",
+    "session_opened": "++ RITE RECALLED ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}
@@ -104,6 +113,45 @@ def stylesheet(f: dict[str, str]) -> str:
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     QMenu {{ background: {t['bg2']}; color: {t['fg']}; border: 1px solid {t['brass_dim']}; }}
     QMenu::item:selected {{ background: {t['rust']}; }}
+    QPushButton#hbtn {{ font-family: "{f['caps']}"; font-size: 9px; letter-spacing: 1px; padding: 3px 8px;
+                        background: transparent; color: {t['brass']}; border: 1px solid {t['brass_dim']}; }}
+    QPushButton#hbtn:hover {{ border-color: {t['brass']}; color: #f1e6d2; }}
+    QPushButton#hbtn:checked {{ background: {t['brass_dim']}; color: {t['bg']}; }}
+    QPushButton#hbtn[alert="true"] {{ color: {t['phosphor']}; border-color: {t['phosphor_dim']}; }}
+    QFrame#sessions {{ background: {t['bg2']}; border-right: 1px solid {t['brass_dim']}; }}
+    QLabel#paneTitle {{ font-family: "{f['caps']}"; font-size: 10px; letter-spacing: 2px; color: {t['brass']}; padding: 6px 8px 2px 8px; }}
+    QListWidget#sessionList {{ background: {t['bg2']}; color: {t['fg']}; border: none; font-family: "{f['mono']}"; font-size: 12px; outline: 0; }}
+    QListWidget#sessionList::item {{ padding: 6px 8px; border-bottom: 1px solid {t['line']}; }}
+    QListWidget#sessionList::item:selected {{ background: {t['user_bg']}; color: #f1e6d2; border-left: 3px solid {t['red']}; }}
+    QListWidget#sessionList::item:hover {{ background: #201714; }}
+    QPushButton#paneNew {{ font-family: "{f['caps']}"; font-size: 9px; letter-spacing: 1px; padding: 5px 8px; margin: 6px 8px;
+                           background: transparent; color: {t['brass']}; border: 1px solid {t['brass_dim']}; }}
+    QPushButton#paneNew:hover {{ border-color: {t['brass']}; }}
+    QDialog#settings {{ background: {t['bg']}; color: {t['fg']}; }}
+    QDialog#settings QLabel {{ color: {t['fg']}; font-family: "{f['mono']}"; font-size: 12px; }}
+    QDialog#settings QLabel#dlgTitle {{ font-family: "{f['caps']}"; font-size: 12px; letter-spacing: 2px; color: {t['brass']}; }}
+    QDialog#settings QLabel#hint {{ color: {t['muted']}; font-size: 11px; }}
+    QDialog#settings QComboBox, QDialog#settings QLineEdit {{ background: #0b0908; color: {t['fg']}; border: 1px solid {t['brass_dim']};
+                           padding: 4px 6px; font-family: "{f['mono']}"; font-size: 12px; min-height: 18px; }}
+    QDialog#settings QComboBox:focus, QDialog#settings QLineEdit:focus {{ border-color: {t['brass']}; }}
+    QDialog#settings QComboBox::drop-down {{ border: none; width: 18px; }}
+    QDialog#settings QComboBox QAbstractItemView {{ background: {t['bg2']}; color: {t['fg']}; selection-background-color: {t['rust']};
+                           border: 1px solid {t['brass_dim']}; }}
+    QDialog#settings QCheckBox {{ color: {t['fg']}; font-family: "{f['mono']}"; font-size: 12px; spacing: 8px; }}
+    QDialog#settings QCheckBox::indicator {{ width: 14px; height: 14px; border: 1px solid {t['brass_dim']}; background: #0b0908; }}
+    QDialog#settings QCheckBox::indicator:checked {{ background: {t['brass']}; }}
+    QDialog#settings QPushButton {{ font-family: "{f['caps']}"; font-size: 10px; letter-spacing: 1px; padding: 6px 14px;
+                           background: transparent; color: {t['brass']}; border: 1px solid {t['brass_dim']}; }}
+    QDialog#settings QPushButton:hover {{ border-color: {t['brass']}; }}
+    QDialog#settings QPushButton#primary {{ background: {t['rust']}; color: #f1e6d2; border-color: {t['red']}; }}
+    QDialog#settings QPushButton#primary:hover {{ background: {t['red']}; }}
+    QDialog#settings QFrame#rule {{ background: {t['line']}; max-height: 1px; min-height: 1px; border: none; }}
+    QMessageBox {{ background: {t['bg']}; color: {t['fg']}; }}
+    QMessageBox QLabel {{ color: {t['fg']}; }}
+    QMessageBox QPushButton {{ font-family: "{f['caps']}"; font-size: 10px; letter-spacing: 1px; padding: 5px 12px;
+                           background: transparent; color: {t['brass']}; border: 1px solid {t['brass_dim']}; }}
+    QInputDialog {{ background: {t['bg']}; color: {t['fg']}; }}
+    QInputDialog QLineEdit {{ background: #0b0908; color: {t['fg']}; border: 1px solid {t['brass_dim']}; padding: 4px; }}
     """
 
 
@@ -157,4 +205,7 @@ def litany_lines(model: str, gateway_ok: bool) -> list[str]:
 
 
 def litany_enabled() -> bool:
-    return os.environ.get("MIKRONOUS_NO_LITANY", "") not in ("1", "true", "yes")
+    if os.environ.get("MIKRONOUS_NO_LITANY", "") in ("1", "true", "yes"):
+        return False
+    from . import settings
+    return bool(settings.load().get("litany", True))

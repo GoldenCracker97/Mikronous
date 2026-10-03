@@ -73,7 +73,10 @@ class ModelService(QObject):
         self._set("unloaded")
 
     def unload_on_quit(self) -> bool:
-        return os.environ.get("MIKRONOUS_KEEP_MODEL", "") not in ("1", "true", "yes")
+        if os.environ.get("MIKRONOUS_KEEP_MODEL", "") in ("1", "true", "yes"):
+            return False
+        from . import settings
+        return not settings.load().get("keep_model", False)
 
     # ------------------------------------------------------------------ internals
     def _tick(self) -> None:
