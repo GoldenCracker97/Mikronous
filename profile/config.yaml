@@ -56,6 +56,13 @@ cron:
 plugins:
   enabled: [mikronous]
 
+# Keep every tool visible to the model. Hermes otherwise hides non-core plugin tools
+# (ours: set_reminder, desktop_notify, ...) and some built-ins behind a tool_search
+# bridge, and small local models then emulate them with terminal commands instead.
+tools:
+  tool_search:
+    enabled: "off"
+
 # ---------------------------------------------------------------------------
 # Local-only guarantees. Nothing here can enrol the user in a paid service:
 # - no fallback_providers / auxiliary overrides: side tasks use the local model or are skipped
