@@ -184,6 +184,12 @@ checks GitHub and, when there are new commits, offers to pull, re-install and re
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
 
+**Media and system control.** "Pause the music", "next track", "what's playing?", "volume 30",
+"mute", "dim the screen to 40", "don't disturb me for an hour", "lock the screen", "bring up Firefox".
+MPRIS, PipeWire/PulseAudio, KDE's brightness service and Plasma's do-not-disturb timer on Linux; media
+and volume keys, WMI brightness and LockWorkStation on Windows. There is deliberately no suspend,
+reboot or shutdown.
+
 **Selected text, anywhere.** Highlight text in any app and press `Meta+Shift+Space`
 (`Ctrl+Alt+Shift+Space` on Windows, `mik selection` from a script): a small menu offers *Explain*,
 *Summarise*, *Rewrite*, *Translate → <language from Settings>* and *Ask about it*. The answer streams

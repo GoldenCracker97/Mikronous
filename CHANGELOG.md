@@ -22,6 +22,8 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
 - **Tray: drop files or folders** onto the window to attach their paths to the next message.
+- **Desktop control tools** `media_control` (MPRIS play/pause/next/status) and `system_control` (volume, brightness,
+  do-not-disturb, lock, focus a window) with a `desktop-control` skill; Linux and Windows.
 - **Selected-text actions** (`Meta+Shift+Space`, Windows `Ctrl+Alt+Shift+Space`, `mik selection`): Explain, Summarise,
   Rewrite, Translate, Ask about it; Rewrite/Translate answers land on the clipboard. Second Desktop Action in the
   `.desktop` file and kglobalshortcutsrc; second `RegisterHotKey` on Windows; both keys in Settings.

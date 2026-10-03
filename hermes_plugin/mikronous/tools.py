@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import desktop, docs_index, network, notes, reminders
+from . import desktop, desktop_control, docs_index, network, notes, reminders
 
 logger = logging.getLogger(__name__)
 TOOLSET = "mikronous"
@@ -206,6 +206,22 @@ SCHEMAS = {
          "confirm": {"type": "boolean", "description": "required true for POST/PUT/PATCH/DELETE after the user confirmed"},
          "timeout": {"type": "number"}, "char_limit": {"type": "integer", "description": "max response chars (default 20000)"}},
         ["url"]),
+    "media_control": _schema(
+        "media_control",
+        "Control the music/video player that is running: play, pause, toggle, stop, next, previous, or status "
+        "(what is playing). Optional player name (spotify, vlc, firefox, elisa, …) when several run.",
+        {"action": {"type": "string", "enum": ["play", "pause", "toggle", "stop", "next", "previous", "status"]},
+         "player": {"type": "string", "description": "part of the player's name; default: the one playing"}},
+        ["action"]),
+    "system_control": _schema(
+        "system_control",
+        "Desktop system knobs: volume_get, volume_set (value 0-100), volume_up/volume_down (value = step, default 10), "
+        "mute, unmute, brightness_get, brightness_set (value 0-100), dnd_on (value = minutes, default 60), dnd_off, "
+        "lock (lock the screen), focus_window (window = part of a title). Never suspends or shuts down.",
+        {"action": {"type": "string", "enum": list(desktop_control.SYSTEM_ACTIONS)},
+         "value": {"description": "level 0-100, step, or minutes depending on the action"},
+         "window": {"type": "string", "description": "for focus_window: part of the window title or app name"}},
+        ["action"]),
     "docs_search": _schema(
         "docs_search",
         "Full-text search over the user's own document folders (Documents by default; markdown, text, code, PDF, Word, spreadsheets). Returns file paths with snippets. Always follow up with read_file on the best hit before answering.",
@@ -218,9 +234,11 @@ SCHEMAS = {
 HANDLERS = {"desktop_notify": desktop_notify, "desktop_open": desktop_open, "clipboard": clipboard,
             "notes_manage": notes_manage, "docs_search": docs_search, "set_reminder": reminders.set_reminder,
             "lan_devices": network.lan_devices, "host_check": network.host_check, "wake_on_lan": network.wake_on_lan,
-            "http_request": network.http_request}
+            "http_request": network.http_request,
+            "media_control": desktop_control.media_control, "system_control": desktop_control.system_control}
 EMOJI = {"desktop_notify": "🔔", "desktop_open": "🚀", "clipboard": "📋", "notes_manage": "📝", "docs_search": "📚",
-         "set_reminder": "⏰", "lan_devices": "🖧", "host_check": "📡", "wake_on_lan": "⚡", "http_request": "🌐"}
+         "set_reminder": "⏰", "lan_devices": "🖧", "host_check": "📡", "wake_on_lan": "⚡", "http_request": "🌐",
+         "media_control": "🎵", "system_control": "🎚️"}
 
 
 # ----------------------------------------------------------------------------- slash command + hook
