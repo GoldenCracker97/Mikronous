@@ -1,12 +1,13 @@
-"""Mikronous client tools, registered eagerly in every Hermes process via ``provides_tools``.
+"""Mikronous client tools, registered from ``register()`` in ``__init__`` via ``register_tools(ctx)``.
 
-``register_tools(ctx)`` receives a full PluginContext, so the shipped skills, the ``/notes``
-slash command and the docs-index refresh hook are registered here too — the platform
-``register()`` in ``__init__`` stays deferred to gateway/cron processes.
+Handlers return dicts (``mik docs``, ``/notes`` and the tests call them directly); Hermes's tool
+contract only accepts strings, so ``register_tools`` wraps each handler to JSON-encode its result.
+The ``/notes`` slash command and the hooks are registered here too.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -230,6 +231,16 @@ def _already_registered(ctx) -> set[str]:
         return set()
 
 
+def _json_result(handler):
+    """Hermes accepts only str (or a multimodal envelope) from a tool handler; our handlers return dicts."""
+    def wrapped(args: dict, **kw: Any):
+        result = handler(args, **kw)
+        return result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, default=str)
+    wrapped.__name__ = getattr(handler, "__name__", "tool")
+    wrapped.__doc__ = handler.__doc__
+    return wrapped
+
+
 def register_tools(ctx) -> None:
     done = _already_registered(ctx)
     if done >= set(HANDLERS):
@@ -237,7 +248,7 @@ def register_tools(ctx) -> None:
     for name, handler in HANDLERS.items():
         if name in done:
             continue
-        ctx.register_tool(name=name, toolset=TOOLSET, schema=SCHEMAS[name], handler=handler,
+        ctx.register_tool(name=name, toolset=TOOLSET, schema=SCHEMAS[name], handler=_json_result(handler),
                           description=SCHEMAS[name]["description"], emoji=EMOJI[name])
     # Shipped skills are NOT registered here: plugin skills stay out of the system prompt's
     # <available_skills>. install.sh symlinks <repo>/skills into the profile's skills/mikronous/
