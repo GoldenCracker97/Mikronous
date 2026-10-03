@@ -3,9 +3,13 @@
 All notable changes to Mikronous are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-03
+
+Fixes and additions from the first days of real use, plus native Windows support.
 
 ### Added
+- **Weather skill**: hourly or daily forecasts for any place from the National Weather Service (US) or
+  Open-Meteo (elsewhere), free and keyless, through a bundled script; no browser scraping.
 - **Windows support**: `scripts\install.ps1` installs everything natively on Windows 10/11 (no admin):
   Hermes Agent when missing, the profile, plugin junctions, `mik`, a prebuilt llama.cpp (CUDA 13.4 /
   CUDA 12.4 / Vulkan / CPU), the model, the gateway scheduled task, the tray with a `Ctrl+Alt+Space`
@@ -71,4 +75,5 @@ and llama.cpp on your own GPU.
 - A GPU with 8 GB or more of VRAM recommended (NVIDIA via CUDA prebuilts; AMD/Intel via Vulkan);
   CPU-only works with small models.
 
+[0.1.1]: https://github.com/GoldenCracker97/Mikronous/releases/tag/v0.1.1
 [0.1.0]: https://github.com/GoldenCracker97/Mikronous/releases/tag/v0.1.0
