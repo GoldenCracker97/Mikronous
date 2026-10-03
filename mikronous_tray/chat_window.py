@@ -6,7 +6,7 @@ import html
 import threading
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QFont, QKeyEvent, QTextCursor
+from PySide6.QtGui import QKeyEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QSizePolicy,
                                QTextBrowser, QVBoxLayout, QWidget)
 
@@ -111,9 +111,13 @@ class ChatWindow(QWidget):
 
         self.setWindowTitle("Mikronous")
         self.setWindowFlag(Qt.Dialog, True)   # keeps it out of the taskbar on most Plasma setups
+        self.setFocusPolicy(Qt.StrongFocus)
         w = self.state.get("window", {})
         self.resize(int(w.get("width", 520)), int(w.get("height", 680)))
         self._build()
+        # Esc hides from anywhere in the window (the input box handles its own Esc too).
+        QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.hide_window)
+        QShortcut(QKeySequence("Ctrl+N"), self, activated=self.new_chat)
         if self.session_id:
             self._load_history()
         else:
