@@ -57,6 +57,7 @@ CANT = {
     "gateway_restarting": "++ GATEWAY REFORGING · A MOMENT ++",
     "gateway_restarted": "++ SETTINGS INSCRIBED · GATEWAY BACK ONLINE ++",
     "session_opened": "++ RITE RECALLED ++",
+    "attached": "++ {n} FILE(S) PLACED ON THE SLATE · ASK AWAY ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}

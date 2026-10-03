@@ -184,6 +184,9 @@ checks GitHub and, when there are new commits, offers to pull, re-install and re
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
 
+**Drop files in.** Drag a file or folder from Dolphin (or Explorer) onto the window: its path is quoted
+into the message, and the assistant opens it directly, no search needed. Several at once work too.
+
 **Routines.** Settings → Routines (or the tray menu, or `mik routines`) lists the scheduled rites:
 agent tasks Hermes's cron runs on the local model and delivers to this desktop as a notification and
 a plate in the slate. `NEW…` starts from a preset (morning briefing at 08:00, watch a page every 6 h,

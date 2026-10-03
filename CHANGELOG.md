@@ -21,6 +21,7 @@ All notable changes to Mikronous are recorded here. The format follows
   restart the gateway automatically.
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
+- **Tray: drop files or folders** onto the window to attach their paths to the next message.
 - **Routines** (Settings → Routines, tray menu, `mik routines`, `mik routine` CLI): scheduled agent tasks through the
   gateway's cron API with presets (morning briefing, watch a page, weekly notes review); pause, run now, edit, delete;
   reminders listed alongside.

@@ -327,3 +327,19 @@ def test_routines_tab(app):
     finally:
         routines_tab.RoutineDialog.exec = monkey
     assert ("create", "Morning briefing", "every 1d at 08:00", "mikronous", ("daily-briefing",)) in calls
+
+
+def test_drop_paths_into_input(app, tmp_path):
+    from PySide6.QtCore import QMimeData, QUrl
+    from mikronous_tray.chat_window import ChatWindow, paths_from_mime, quote_paths
+    f = tmp_path / "report q3.pdf"
+    f.write_text("x")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(f)), QUrl("https://example.com/not-local")])
+    assert paths_from_mime(mime) == [str(f)]
+    assert quote_paths(["/a/b c.txt", "/d"]) == '"/a/b c.txt"\n"/d"'
+    w = ChatWindow(FakeClient())
+    w.input.setPlainText("summarise this")
+    w.attach_paths(paths_from_mime(mime))
+    assert w.input.toPlainText() == f'summarise this\n"{f}"\n' and "1 FILE" in w.status.text()
+    assert w.input.acceptDrops() and w.view.viewport().acceptDrops()

@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QIcon, QKeyEvent, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon, QKeyEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
                                QTextBrowser, QVBoxLayout, QWidget)
 
@@ -81,9 +81,46 @@ class ChatWorker(QObject):
 
 
 # ------------------------------------------------------------------------------------- input box
+def paths_from_mime(mime) -> list[str]:
+    """Local file/folder paths from a drag's mime data (file:// URLs), in drop order."""
+    if not mime.hasUrls():
+        return []
+    return [u.toLocalFile() for u in mime.urls() if u.isLocalFile() and u.toLocalFile()]
+
+
+def quote_paths(paths: list[str]) -> str:
+    """How dropped paths are written into the message: one per line, quoted, so the agent reads them verbatim."""
+    return "\n".join(f'"{p}"' for p in paths)
+
+
 class InputBox(QPlainTextEdit):
     submit = Signal()
     escape = Signal()
+    dropped = Signal(list)                    # local paths
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, e: QDragEnterEvent) -> None:  # noqa: N802
+        if paths_from_mime(e.mimeData()):
+            e.acceptProposedAction()
+        else:
+            super().dragEnterEvent(e)
+
+    def dragMoveEvent(self, e) -> None:  # noqa: N802
+        if paths_from_mime(e.mimeData()):
+            e.acceptProposedAction()
+        else:
+            super().dragMoveEvent(e)
+
+    def dropEvent(self, e: QDropEvent) -> None:  # noqa: N802
+        paths = paths_from_mime(e.mimeData())
+        if paths:
+            e.acceptProposedAction()
+            self.dropped.emit(paths)
+        else:
+            super().dropEvent(e)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:  # noqa: N802
         if e.key() in (Qt.Key_Return, Qt.Key_Enter) and not (e.modifiers() & Qt.ShiftModifier):
@@ -211,10 +248,13 @@ class ChatWindow(QWidget):
 
         row = QHBoxLayout()
         self.input = InputBox(objectName="input")
-        self.input.setPlaceholderText("> query the machine spirit_   (Enter transmits · Shift+Enter new line · Esc hides)")
+        self.input.setPlaceholderText("> query the machine spirit_   (Enter transmits · Shift+Enter new line · drop files here · Esc hides)")
         self.input.setFixedHeight(72)
         self.input.submit.connect(self.send)
         self.input.escape.connect(self.hide_window)
+        self.input.dropped.connect(self.attach_paths)
+        self.view.viewport().setAcceptDrops(True)
+        self.view.viewport().installEventFilter(self)      # drops on the transcript land in the input too
         row.addWidget(self.input, 1)
         col = QVBoxLayout()
         self.send_btn = QPushButton("TRANSMIT", objectName="send")
@@ -361,6 +401,28 @@ class ChatWindow(QWidget):
         cant = CANT.get(f"update_{state}")
         if cant and self._worker is None:
             self._set_status(cant + (f" · {detail}" if detail and state in ("available", "failed") else ""))
+
+    def attach_paths(self, paths: list[str]) -> None:
+        """Dropped files/folders: quote them into the input so the next message carries them."""
+        if not paths:
+            return
+        cur = self.input.toPlainText().rstrip()
+        block = quote_paths(paths)
+        self.input.setPlainText((cur + "\n" if cur else "") + block + "\n")
+        self.input.moveCursor(QTextCursor.End)
+        self.input.setFocus()
+        self._set_status(CANT["attached"].format(n=len(paths)))
+
+    def eventFilter(self, obj, e) -> bool:  # noqa: N802
+        from PySide6.QtCore import QEvent
+        if obj is self.view.viewport() and e.type() in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
+            paths = paths_from_mime(e.mimeData())
+            if paths:
+                e.acceptProposedAction()
+                if e.type() == QEvent.Drop:
+                    self.attach_paths(paths)
+                return True
+        return super().eventFilter(obj, e)
 
     def show_inbox_message(self, payload: dict) -> None:
         title = payload.get("title") or "Mikronous"
