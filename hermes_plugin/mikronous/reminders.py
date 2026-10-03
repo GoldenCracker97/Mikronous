@@ -51,7 +51,8 @@ _WHEN_ALIASES = ("when", "time", "at", "in", "schedule", "delay", "after", "date
 _MESSAGE_ALIASES = ("message", "text", "reminder", "title", "body", "task", "note", "content")
 _EMBEDDED_WHEN = re.compile(
     r"\b(in\s+(?:\d+(?:\.\d+)?|an?|one)\s*(?:" + "|".join(sorted(_UNITS, key=len, reverse=True)) + r")"
-    r"|(?:every\s+\S+(?:\s+at\s+\S+)?)"
+    r"|(?:every\s+(?:\d+(?:\.\d+)?\s*(?:" + "|".join(sorted(_UNITS, key=len, reverse=True)) + r")|[a-z]+)"
+    r"(?:\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?)"
     r"|(?:(?:today|tomorrow|tonight|" + "|".join(_WEEKDAYS) + r")\s+)?at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b",
     re.IGNORECASE)
 _REMIND_PREFIX = re.compile(r"^(?:please\s+)?(?:remind\s+me\s+)?(?:to\s+)?", re.IGNORECASE)
