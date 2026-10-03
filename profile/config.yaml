@@ -79,6 +79,4 @@ agent:
 platforms:
   mikronous:
     enabled: true
-
-gateway:
-  gateway_restart_notification: false   # no "Gateway online" popup on every restart
+    gateway_restart_notification: false   # per-platform flag: no "Gateway online" popup on restarts
