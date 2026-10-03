@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import doctor
+from . import __version__, doctor
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
         from mikronous_tray.__main__ import main as tray_main
         return tray_main(argv[1:] if argv[0] == "tray" else ["quit" if argv[0] == "quit-tray" else argv[0]])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")
+    parser.add_argument("--version", action="version", version=f"mik {__version__}")
     sub = parser.add_subparsers(dest="cmd")
 
     p_doc = sub.add_parser("doctor", help="check install state of every component")

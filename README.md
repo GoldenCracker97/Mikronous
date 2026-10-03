@@ -6,7 +6,9 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **all phases complete** and verified on a real Plasma 5.27 desktop with an RTX 4070 Ti.
+Release: **v0.1.0** ([changelog](CHANGELOG.md)), verified on a Plasma 5.27 desktop with an RTX 4070 Ti.
+
+![The Mikronous data-slate](docs/screenshot-dataslate.png)
 
 ## What you get
 
@@ -21,14 +23,21 @@ Status: **all phases complete** and verified on a real Plasma 5.27 desktop with 
 
 ## Install (Linux, KDE Plasma)
 
+Requirements: Linux with KDE Plasma 5.27 or 6 and a systemd user session, Python 3.11+, and a GPU
+with 8 GB or more of VRAM (NVIDIA via CUDA prebuilts, AMD/Intel via Vulkan; CPU-only works with
+small models).
+
 1. Install Hermes Agent: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`
-2. Clone this repo and run the installer:
+2. Clone this repo at the release tag and run the installer:
 
 ```bash
 git clone https://github.com/GoldenCracker97/Mikronous && cd Mikronous
+git checkout v0.1.0
 scripts/install.sh
 mik doctor
 ```
+
+To follow development instead, stay on `Main` and re-run `scripts/install.sh` after each `git pull`.
 
 The installer creates the Hermes profile, links the plugin, installs the `mik` CLI (with PySide6 for
 the tray), downloads a prebuilt `llama-server` from the llama.cpp nightly releases, downloads the
@@ -204,6 +213,16 @@ systemd/            User units + env template
 scripts/            install.sh, install-llama.sh, fetch-model.sh
 ```
 
+## Contributing
+
+```bash
+pip install -e ".[tray,dev]"
+QT_QPA_PLATFORM=offscreen pytest
+```
+
+The tests run headless (Qt offscreen) and need no Hermes install; CI runs them on every push.
+
 ## License
 
-MIT.
+MIT (see `LICENSE`). Bundled fonts are under the SIL Open Font License; see
+`mikronous_tray/assets/README.md`.

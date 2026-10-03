@@ -152,6 +152,8 @@ def _shortcut_key() -> str:
 
 
 def main() -> int:
+    from . import __version__
+    print(f"Mikronous {__version__}")
     rows = run_checks()
     width = max(len(r[0]) for r in rows)
     for name, status, detail in rows:

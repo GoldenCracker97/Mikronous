@@ -1,0 +1,21 @@
+import os
+
+from mikronous_cli import doctor
+
+
+def test_shortcut_key_kf5_kf6_and_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".config").mkdir()
+    cases = [
+        ("[kwin]\nfoo=bar\n\n[mikronous.desktop]\n_k_friendly_name=Mikronous\n_launch=Meta+Space,none,Mikronous\n", "Meta+Space"),
+        ("[services][mikronous.desktop]\n_launch=Meta+Space\n", "Meta+Space"),
+        ("[kwin]\nx=y\n", ""),
+    ]
+    for text, expected in cases:
+        (tmp_path / ".config" / "kglobalshortcutsrc").write_text(text)
+        assert doctor._shortcut_key() == expected
+
+
+def test_tray_running_false_without_socket(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    assert doctor._tray_running() is False
