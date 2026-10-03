@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 1** — profile, local model server, gateway, hardware-fit tool, desktop tools plugin. No tray UI yet.
+Status: **Phase 2** — profile, local model server, gateway, hardware-fit tool, desktop tools, reminders as notifications. No tray UI yet.
 
 ## What you get
 
@@ -16,7 +16,7 @@ Status: **Phase 1** — profile, local model server, gateway, hardware-fit tool,
 | `mikronous-llama.service` | llama.cpp server on `:8081`, tuned for ~8 GB VRAM by default | 0 |
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
-| `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications | 2 |
+| `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications (and in `~/.local/share/mikronous/inbox.jsonl`) | 2 ✓ |
 | Tray app | Hotkey (`Meta+Space`) chat window, streaming, approval cards | 3 |
 
 ## Install (Linux, KDE Plasma)
@@ -90,6 +90,11 @@ whichever applies.
 | `clipboard` | Read / set the clipboard (Klipper via `qdbus6`, `wl-paste`/`xclip` fallback) | |
 | `notes_manage` | Durable notes and to-dos: add, list, search, done, update, delete; also `/notes` in chat | `~/Mikronous/notes/*.md` (one file per note, plain markdown you can edit) |
 | `docs_search` | Full-text search over your document folders, then the agent reads the hit with `read_file` | index in `~/.local/share/mikronous/docs.sqlite`; folders from `MIKRONOUS_DOCS_DIRS` (default `~/Documents`) |
+
+**Reminders.** "Remind me in 20 minutes to …" or "every weekday at 9 …" creates a Hermes cron
+job delivered to the `mikronous` platform: a KDE notification, plus a line in
+`~/.local/share/mikronous/inbox.jsonl` (and the tray window once Phase 3 lands) so nothing is
+lost while you are away. `mikronous cron list` shows the jobs.
 
 `mik docs status | reindex | search <q>` manages the document index from the terminal. PDFs and
 Office files are extracted with Hermes's own converter when indexed from inside a Hermes session.

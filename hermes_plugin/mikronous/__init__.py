@@ -12,14 +12,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def register(ctx) -> None:
     """Deferred plugin entry point (gateway / cron / send_message paths)."""
     try:
         from .adapter import register_platform
-    except ImportError:
-        logger.debug("mikronous: platform adapter not present yet (Phase 2)")
+    except Exception as exc:  # noqa: BLE001 - gateway modules missing outside Hermes
+        logger.warning("mikronous: platform adapter unavailable: %s", exc)
         return
     register_platform(ctx)

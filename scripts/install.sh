@@ -92,6 +92,11 @@ ln -sfn "$REPO_DIR/hermes_plugin/mikronous" "$PROFILE_HOME/plugins/mikronous"
 echo "linked $PROFILE_HOME/plugins/mikronous -> $REPO_DIR/hermes_plugin/mikronous"
 # config.yaml already lists plugins.enabled: [mikronous]; this records the consent grant too.
 hp plugins enable mikronous >/dev/null 2>&1 || echo "(plugins enable skipped; config.yaml enables it anyway)"
+# Shipped skills: a `mikronous` category inside the profile's skills dir, so they appear in the
+# agent's <available_skills> like any installed skill (Hermes follows symlinks when scanning).
+mkdir -p "$PROFILE_HOME/skills"
+ln -sfn "$REPO_DIR/skills" "$PROFILE_HOME/skills/mikronous"
+echo "linked $PROFILE_HOME/skills/mikronous -> $REPO_DIR/skills"
 
 # ---------------------------------------------------------------------------
 step "mik CLI"

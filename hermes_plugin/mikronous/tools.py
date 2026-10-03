@@ -215,15 +215,9 @@ def register_tools(ctx) -> None:
     for name, handler in HANDLERS.items():
         ctx.register_tool(name=name, toolset=TOOLSET, schema=SCHEMAS[name], handler=handler,
                           description=SCHEMAS[name]["description"], emoji=EMOJI[name])
-    # Shipped skills (read-only, namespaced mikronous:<name>)
-    if SKILLS_DIR.is_dir() and hasattr(ctx, "register_skill"):
-        for child in sorted(SKILLS_DIR.iterdir()):
-            skill_md = child / "SKILL.md"
-            if child.is_dir() and skill_md.exists():
-                try:
-                    ctx.register_skill(child.name, skill_md)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("mikronous: could not register skill %s: %s", child.name, exc)
+    # Shipped skills are NOT registered here: plugin skills stay out of the system prompt's
+    # <available_skills>. install.sh symlinks <repo>/skills into the profile's skills/mikronous/
+    # category instead, so the model sees them like any installed skill.
     if hasattr(ctx, "register_command"):
         try:
             ctx.register_command("notes", _slash_notes, description="Mikronous notes: list | all | add <text> | done <id> | search <q>",
