@@ -95,12 +95,26 @@ hp plugins enable mikronous >/dev/null 2>&1 || echo "(plugins enable skipped; co
 
 # ---------------------------------------------------------------------------
 step "mik CLI"
+install_mik_venv() {
+  # No uv/pipx: a private venv under ~/.local/share/mikronous plus a ~/.local/bin/mik symlink.
+  local venv="$HOME/.local/share/mikronous/venv"
+  python3 -m venv "$venv" >/dev/null 2>&1 || python3 -m venv --without-pip "$venv" >/dev/null 2>&1 || return 1
+  if [[ ! -x "$venv/bin/pip" ]]; then
+    # Debian/Ubuntu without python3-venv's ensurepip: bootstrap pip into the venv.
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py | "$venv/bin/python" - >/dev/null 2>&1 || return 1
+  fi
+  "$venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
+  "$venv/bin/pip" install --quiet --editable "$REPO_DIR" >/dev/null 2>&1 || return 1
+  mkdir -p "$HOME/.local/bin" && ln -sfn "$venv/bin/mik" "$HOME/.local/bin/mik"
+}
 if command -v uv >/dev/null 2>&1; then
   (cd "$REPO_DIR" && uv tool install --force --editable . >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
 elif command -v pipx >/dev/null 2>&1; then
   pipx install --force --editable "$REPO_DIR" >/dev/null 2>&1 && echo "installed: mik (pipx)" || fail "pipx install failed"
+elif install_mik_venv; then
+  echo "installed: mik (venv at ~/.local/share/mikronous/venv -> ~/.local/bin/mik)"
 else
-  fail "neither uv nor pipx found; use: python3 -m mikronous_cli doctor  (from $REPO_DIR)"
+  fail "could not install mik (no uv/pipx, venv failed); use: python3 -m mikronous_cli doctor  (from $REPO_DIR)"
 fi
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "note: add ~/.local/bin to PATH for 'mik' and 'mikronous' commands" ;; esac
 
@@ -150,8 +164,9 @@ fi
 
 # ---------------------------------------------------------------------------
 step "Hermes gateway (API server + cron) as a user service"
-if hp gateway install; then
-  hp gateway restart || hp gateway start || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
+# stdin from /dev/null makes Hermes take its defaults (start now + start on login) without prompting.
+if hp gateway install </dev/null; then
+  hp gateway restart </dev/null || hp gateway start </dev/null || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
 else
   fail "gateway install failed; run: hermes -p $PROFILE gateway install"
 fi
