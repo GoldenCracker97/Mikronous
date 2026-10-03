@@ -11,6 +11,10 @@ provides_tools:
   - clipboard
   - notes_manage
   - docs_search
+  - set_reminder
+provides_hooks:
+  - pre_tool_call
+  - on_session_end
 optional_env:
   - name: MIKRONOUS_HOME_CHANNEL
     description: "Default delivery target for deliver=mikronous cron jobs (any label; there is one desktop)"

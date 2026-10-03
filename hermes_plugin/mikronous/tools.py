@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import desktop, docs_index, notes
+from . import desktop, docs_index, notes, reminders
 
 logger = logging.getLogger(__name__)
 TOOLSET = "mikronous"
@@ -159,6 +159,16 @@ SCHEMAS = {
          "query": {"type": "string", "description": "search terms"},
          "limit": {"type": "integer"}},
         ["action"]),
+    "set_reminder": _schema(
+        "set_reminder",
+        "Schedule a desktop reminder for the user. THE tool for 'remind me ...', timers and recurring nudges. "
+        "Fires as a desktop notification at the given time with no further action from you. "
+        "Never emulate reminders with the terminal (sleep) — use this.",
+        {"action": {"type": "string", "enum": ["create", "list", "cancel"], "description": "default create"},
+         "when": {"type": "string", "description": "e.g. 'in 20 minutes', 'in 2 hours', 'at 15:30', 'tomorrow at 9am', 'friday at 10', 'every weekday at 9am', 'every 30 minutes'"},
+         "message": {"type": "string", "description": "What to show the user, in their words (e.g. 'Stretch', 'Call the dentist')"},
+         "id": {"type": "string", "description": "reminder id for cancel (from list)"}},
+        []),
     "docs_search": _schema(
         "docs_search",
         "Full-text search over the user's own document folders (Documents by default; markdown, text, code, PDF, Word, spreadsheets). Returns file paths with snippets. Always follow up with read_file on the best hit before answering.",
@@ -169,8 +179,9 @@ SCHEMAS = {
 }
 
 HANDLERS = {"desktop_notify": desktop_notify, "desktop_open": desktop_open, "clipboard": clipboard,
-            "notes_manage": notes_manage, "docs_search": docs_search}
-EMOJI = {"desktop_notify": "🔔", "desktop_open": "🚀", "clipboard": "📋", "notes_manage": "📝", "docs_search": "📚"}
+            "notes_manage": notes_manage, "docs_search": docs_search, "set_reminder": reminders.set_reminder}
+EMOJI = {"desktop_notify": "🔔", "desktop_open": "🚀", "clipboard": "📋", "notes_manage": "📝", "docs_search": "📚",
+         "set_reminder": "⏰"}
 
 
 # ----------------------------------------------------------------------------- slash command + hook
@@ -225,7 +236,8 @@ def register_tools(ctx) -> None:
         except Exception as exc:  # noqa: BLE001
             logger.debug("mikronous: /notes not registered: %s", exc)
     if hasattr(ctx, "register_hook"):
-        try:
-            ctx.register_hook("on_session_end", _on_session_end)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("mikronous: on_session_end hook not registered: %s", exc)
+        for hook_name, cb in (("on_session_end", _on_session_end), ("pre_tool_call", reminders.guard_terminal_reminders)):
+            try:
+                ctx.register_hook(hook_name, cb)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("mikronous: %s hook not registered: %s", hook_name, exc)

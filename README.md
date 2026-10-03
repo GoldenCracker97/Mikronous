@@ -15,7 +15,7 @@ Status: **Phase 2** — profile, local model server, gateway, hardware-fit tool,
 | Hermes profile `mikronous` | Own persona (`SOUL.md`), memory, config; full Hermes toolset + the web (keyless DuckDuckGo) | 0 |
 | `mikronous-llama.service` | llama.cpp server on `:8081`, tuned for ~8 GB VRAM by default | 0 |
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
-| Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
+| Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`, `set_reminder`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
 | `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications (and in `~/.local/share/mikronous/inbox.jsonl`) | 2 ✓ |
 | Tray app | Hotkey (`Meta+Space`) chat window, streaming, approval cards | 3 |
 
@@ -90,11 +90,13 @@ whichever applies.
 | `desktop_notify` | KDE notification via D-Bus (`notify-send` fallback) | |
 | `desktop_open` | Open a URL, a file, or launch an installed app by name (`firefox`, `dolphin`) | `.desktop` files in the usual XDG dirs |
 | `clipboard` | Read / set the clipboard (Klipper via `qdbus6`, `wl-paste`/`xclip` fallback) | |
+| `set_reminder` | "Remind me in 20 minutes to…": schedules a Hermes cron job in no-agent mode whose output is delivered as a desktop notification; `list` / `cancel` too | jobs in `mikronous cron list`; scripts in the profile's `scripts/` |
 | `notes_manage` | Durable notes and to-dos: add, list, search, done, update, delete; also `/notes` in chat | `~/Mikronous/notes/*.md` (one file per note, plain markdown you can edit) |
 | `docs_search` | Full-text search over your document folders, then the agent reads the hit with `read_file` | index in `~/.local/share/mikronous/docs.sqlite`; folders from `MIKRONOUS_DOCS_DIRS` (default `~/Documents`) |
 
-**Reminders.** "Remind me in 20 minutes to …" or "every weekday at 9 …" creates a Hermes cron
-job delivered to the `mikronous` platform: a KDE notification, plus a line in
+**Reminders.** "Remind me in 20 minutes to …" or "every weekday at 9 …" makes the agent call
+`set_reminder`, which creates a Hermes cron job (no model involved when it fires) delivered to the
+`mikronous` platform: a KDE notification, plus a line in
 `~/.local/share/mikronous/inbox.jsonl` (and the tray window once Phase 3 lands) so nothing is
 lost while you are away. `mikronous cron list` shows the jobs. Reminders are created from chat
 sessions (the tray, `mikronous chat`, or `mik ask "…"`); Hermes hides the scheduling tool in
