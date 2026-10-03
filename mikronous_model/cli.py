@@ -207,7 +207,7 @@ def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | No
     if not _has_gpu(hw):
         fit.ngl = 0
     env.apply_fit(fit, meta, path, threads=_threads(hw), mmproj_path=mmproj_path)
-    _sync_vision_config(mmproj_path is not None, restart=False)      # the server restart below reloads nothing in Hermes; gateway picks it up on its next restart
+    _sync_vision_config(mmproj_path is not None, restart=not getattr(args, "no_restart", False))   # gateway restart so Hermes sends pixels
     if getattr(args, "kv", None):
         k, _, v = args.kv.partition("/")
         env["LLAMA_KV_K"], env["LLAMA_KV_V"] = k, (v or k)
