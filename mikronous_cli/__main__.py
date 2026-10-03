@@ -31,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     p_priv.add_argument("action", nargs="?", default="status", choices=["status", "offline", "online"])
     p_priv.set_defaults(func=lambda a: _privacy(a.action))
 
+    p_docs = sub.add_parser("docs", help="document index for docs_search: status | reindex [--force] | search <q>")
+    p_docs.add_argument("rest", nargs=argparse.REMAINDER)
+    p_docs.set_defaults(func=lambda a: _docs(a.rest))
+
     p_tog = sub.add_parser("toggle", help="(not yet available; arrives in Phase 3)")
     p_tog.set_defaults(func=lambda a: _not_yet("toggle", "3"))
 
@@ -44,6 +48,11 @@ def main(argv: list[str] | None = None) -> int:
 def _model(rest: list[str]) -> int:
     from mikronous_model.cli import main as model_main
     return model_main(rest, prog="mik model")
+
+
+def _docs(rest: list[str]) -> int:
+    from . import docs
+    return docs.main(rest)
 
 
 def _privacy(action: str) -> int:

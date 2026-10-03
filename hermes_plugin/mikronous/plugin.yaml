@@ -4,13 +4,20 @@ kind: platform
 version: 0.1.0
 description: "KDE Plasma desktop integration for Hermes: notifications, app/URL launching, clipboard, local notes, local document search, and a delivery platform for reminders."
 author: GoldenCracker97
-# Client tools the agent can call from any session (registered eagerly from tools.py).
-# Filled in during Phase 1.
-provides_tools: []
+# Client tools the agent can call from any session; Hermes imports tools.py eagerly for these.
+provides_tools:
+  - desktop_notify
+  - desktop_open
+  - clipboard
+  - notes_manage
+  - docs_search
 optional_env:
   - name: MIKRONOUS_HOME_CHANNEL
     description: "Default delivery target for deliver=mikronous cron jobs (any label; there is one desktop)"
     password: false
   - name: MIKRONOUS_DOCS_DIRS
-    description: "Colon-separated folders indexed by docs_search"
+    description: "Colon-separated folders indexed by docs_search (default ~/Documents)"
+    password: false
+  - name: MIKRONOUS_NOTES_DIR
+    description: "Where notes_manage keeps its markdown notes (default ~/Mikronous/notes)"
     password: false
