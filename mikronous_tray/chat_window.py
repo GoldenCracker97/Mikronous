@@ -297,12 +297,14 @@ class ChatWindow(QWidget):
         self.input.setFocus()
 
     # ------------------------------------------------------------------ settings
-    def open_settings(self) -> None:
+    def open_settings(self, tab: str = "slate") -> None:
         from .settings_dialog import SettingsDialog
         if self._settings_thread is not None:
             return                                   # a previous save is still restarting the gateway
         old = prefs.read()
-        dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut())
+        dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut(), client=self.client)
+        if tab == "routines" and dlg.routines is not None:
+            dlg.tabs.setCurrentIndex(1)
         dlg.setStyleSheet(self.styleSheet())
         if dlg.exec() != SettingsDialog.Accepted:
             return

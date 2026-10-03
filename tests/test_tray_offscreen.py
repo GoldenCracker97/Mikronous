@@ -260,3 +260,70 @@ def test_settings_dialog_values(app):
     v = d.values()
     assert (v.voice, v.approvals, v.internet, v.keep_model, v.docs_dirs) == ("plain", "manual", False, True, "~/Docs")
     assert v.changed_from(cur) == ["voice", "approvals", "internet", "keep_model", "docs_dirs"]
+
+
+def test_routines_helpers():
+    from mikronous_tray import routines as R
+    now = 1_000_000.0
+    job = {"id": "j1", "name": "Morning briefing", "deliver": "mikronous", "schedule_display": "every 1d at 08:00",
+           "next_run_at": now + 9 * 3600 + 120, "enabled": True, "state": "scheduled", "last_status": "success"}
+    assert R.is_routine(job) and not R.is_reminder(job) and not R.paused(job)
+    assert R.summary(job, now) == ("Morning briefing", "every 1d at 08:00 · in 9h 02m · last: success · routine")
+    rem = {"name": "Reminder: stretch", "deliver": "mikronous", "no_agent": True, "schedule": {"kind": "once", "display": "once"},
+           "next_run_at": now + 30, "enabled": False, "state": "paused"}
+    assert R.is_reminder(rem) and R.paused(rem) and R.summary(rem, now)[1] == "once · PAUSED · reminder"
+    assert not R.is_routine({"deliver": "local"}) and R.is_routine({"deliver": "mikronous:desktop"})
+    assert R.when_text(now - 400, now) == "overdue" and R.when_text(now + 3 * 86400, now) == "in 3d" and R.when_text(None) == ""
+    assert R.preset("briefing").skills == ("daily-briefing",) and R.preset("nope").key == "custom"
+
+
+def test_routines_tab(app):
+    from mikronous_tray import routines_tab
+    from mikronous_tray.routines_tab import RoutineDialog, RoutinesTab
+    calls = []
+
+    class JobsClient:
+        def list_jobs(self, include_disabled=True):
+            return [{"id": "j1", "name": "Morning briefing", "deliver": "mikronous", "schedule_display": "every 1d at 08:00",
+                     "next_run_at": time.time() + 3600, "enabled": True, "state": "scheduled", "prompt": "Run it"},
+                    {"id": "j2", "name": "Reminder: blink", "deliver": "mikronous", "no_agent": True, "schedule_display": "once",
+                     "enabled": True, "state": "scheduled"},
+                    {"id": "j3", "name": "telegram thing", "deliver": "telegram"}]
+
+        def create_job(self, name, schedule, prompt, deliver="mikronous", skills=None):
+            calls.append(("create", name, schedule, deliver, tuple(skills or ()))); return {"id": "new"}
+
+        def update_job(self, job_id, **fields):
+            calls.append(("update", job_id, fields)); return {}
+
+        def delete_job(self, job_id):
+            calls.append(("delete", job_id))
+
+        def job_action(self, job_id, action):
+            calls.append((action, job_id)); return {}
+
+    tab = RoutinesTab(JobsClient())
+    tab.refresh()
+    assert pump(app, lambda: tab.list.count() == 2, 5)
+    assert [j["id"] for j in tab.jobs] == ["j1", "j2"]
+    tab.list.setCurrentRow(1)
+    assert not tab.btn_edit.isEnabled() and tab.btn_pause.text() == "PAUSE"
+    tab.list.setCurrentRow(0)
+    assert tab.btn_edit.isEnabled()
+    tab.toggle_pause(); tab.run_now()
+    assert ("pause", "j1") in calls and ("run", "j1") in calls
+    dlg = RoutineDialog(None, None, "briefing")
+    v = dlg.values()
+    assert v["name"] == "Morning briefing" and v["skills"] == ["daily-briefing"] and "daily-briefing" in v["prompt"]
+    dlg.preset.setCurrentIndex([p.key for p in routines_tab.R.PRESETS].index("custom"))
+    assert dlg.values()["name"] == "" and dlg.values()["prompt"] == ""
+    edit = RoutineDialog(None, {"name": "X", "schedule_display": "every 6h", "prompt": "p", "skills": ["s"]})
+    assert edit.values() == {"name": "X", "schedule": "every 6h", "prompt": "p", "skills": ["s"]}
+    # NEW… through a stubbed dialog exec
+    monkey = routines_tab.RoutineDialog.exec
+    routines_tab.RoutineDialog.exec = lambda self: (self.preset.setCurrentIndex(0), 1)[1]
+    try:
+        tab.new()
+    finally:
+        routines_tab.RoutineDialog.exec = monkey
+    assert ("create", "Morning briefing", "every 1d at 08:00", "mikronous", ("daily-briefing",)) in calls

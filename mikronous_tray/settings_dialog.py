@@ -4,28 +4,39 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QPushButton, QTabWidget, QVBoxLayout, QWidget)
 
 from . import prefs as P
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent: QWidget | None, current: P.Prefs, *, model: str = "", kde_shortcut: str = ""):
+    def __init__(self, parent: QWidget | None, current: P.Prefs, *, model: str = "", kde_shortcut: str = "",
+                 client=None):
         super().__init__(parent, objectName="settings")
         self.setWindowTitle("Mikronous settings")
         self.setModal(True)
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(500)
         self._initial = current
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 12)
         root.setSpacing(10)
         root.addWidget(QLabel("SETTINGS OF THE SLATE", objectName="dlgTitle"))
 
-        form = QFormLayout()
+        self.tabs = QTabWidget()
+        root.addWidget(self.tabs, 1)
+        slate = QWidget()
+        form = QFormLayout(slate)
+        form.setContentsMargins(4, 10, 4, 4)
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(8)
-        root.addLayout(form)
+        self.tabs.addTab(slate, "SLATE")
+        self.routines = None
+        if client is not None:
+            from .routines_tab import RoutinesTab
+            self.routines = RoutinesTab(client)
+            self.tabs.addTab(self.routines, "ROUTINES")
+            self.tabs.currentChanged.connect(lambda i: self.routines.refresh() if i == 1 else None)
 
         self.voice = QComboBox()
         for lvl in P.VOICES:

@@ -146,6 +146,13 @@ def stylesheet(f: dict[str, str]) -> str:
     QDialog#settings QPushButton#primary {{ background: {t['rust']}; color: #f1e6d2; border-color: {t['red']}; }}
     QDialog#settings QPushButton#primary:hover {{ background: {t['red']}; }}
     QDialog#settings QFrame#rule {{ background: {t['line']}; max-height: 1px; min-height: 1px; border: none; }}
+    QDialog#settings QTabWidget::pane {{ border: 1px solid {t['brass_dim']}; top: -1px; }}
+    QDialog#settings QTabBar::tab {{ font-family: "{f['caps']}"; font-size: 10px; letter-spacing: 2px; padding: 6px 16px;
+                           background: {t['bg2']}; color: {t['muted']}; border: 1px solid {t['brass_dim']}; border-bottom: none; margin-right: 2px; }}
+    QDialog#settings QTabBar::tab:selected {{ background: {t['bg']}; color: {t['brass']}; }}
+    QDialog#settings QPlainTextEdit {{ background: #0b0908; color: {t['fg']}; border: 1px solid {t['brass_dim']};
+                           font-family: "{f['mono']}"; font-size: 12px; padding: 4px; }}
+    QDialog#settings QListWidget#sessionList {{ border: 1px solid {t['brass_dim']}; }}
     QMessageBox {{ background: {t['bg']}; color: {t['fg']}; }}
     QMessageBox QLabel {{ color: {t['fg']}; }}
     QMessageBox QPushButton {{ font-family: "{f['caps']}"; font-size: 10px; letter-spacing: 1px; padding: 5px 12px;

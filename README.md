@@ -154,7 +154,8 @@ please report what breaks.
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
 | `mik voice [plain\|light\|full]` | How much machine-priest the assistant speaks |
-| `mik settings` / `mik chats` | Open the tray's Settings dialog / toggle the past-chats pane |
+| `mik settings` / `mik chats` / `mik routines` | Open the tray's Settings dialog / toggle the past-chats pane / open the Routines tab |
+| `mik routine list\|add\|pause\|resume\|run\|remove` | Scheduled agent tasks that deliver to the desktop, from a terminal |
 | `mik model start\|stop\|restart` | Start or stop the model server by hand (systemd on Linux, a background process on Windows) |
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
@@ -182,6 +183,14 @@ model stays loaded on Quit, and on Windows the hotkey. Changes that the gateway 
 checks GitHub and, when there are new commits, offers to pull, re-install and restart the tray (the
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
+
+**Routines.** Settings → Routines (or the tray menu, or `mik routines`) lists the scheduled rites:
+agent tasks Hermes's cron runs on the local model and delivers to this desktop as a notification and
+a plate in the slate. `NEW…` starts from a preset (morning briefing at 08:00, watch a page every 6 h,
+weekly notes review) or a custom schedule and prompt; schedules are what Hermes cron accepts
+(`every 1d at 08:00`, `every 6h`, `weekdays at 9am`, `0 18 * * 5`). Pause, run now, edit and delete
+are there too, and reminders set in chat appear in the same list. The assistant itself still cannot
+create or change schedules except through `set_reminder`.
 
 **Model lifecycle.** The tray owns the model: it starts `mikronous-llama.service` when it launches
 (the status line reads "the cogitator wakes" until the first answer is possible) and stops it on

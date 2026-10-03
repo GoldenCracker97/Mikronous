@@ -150,6 +150,32 @@ class HermesClient:
     def delete_session(self, session_id: str) -> None:
         self._json("DELETE", f"{self.api_root}/api/sessions/{session_id}")
 
+    # ----------------------------------------------------------------- cron jobs (routines)
+    def list_jobs(self, include_disabled: bool = True) -> list[dict]:
+        """Every cron job the gateway knows (``/api/jobs``). [] when the gateway is down."""
+        try:
+            data = self._json("GET", f"{self.api_root}/api/jobs", params={"include_disabled": str(include_disabled).lower()})
+        except GatewayError:
+            return []
+        return [j for j in (data.get("jobs") or []) if isinstance(j, dict) and j.get("id")]
+
+    def create_job(self, name: str, schedule: str, prompt: str, *, deliver: str = "mikronous",
+                   skills: list[str] | None = None) -> dict:
+        body: dict[str, Any] = {"name": name, "schedule": schedule, "prompt": prompt, "deliver": deliver}
+        if skills:
+            body["skills"] = skills
+        return self._json("POST", f"{self.api_root}/api/jobs", json=body).get("job") or {}
+
+    def update_job(self, job_id: str, **fields: Any) -> dict:
+        return self._json("PATCH", f"{self.api_root}/api/jobs/{job_id}", json=fields).get("job") or {}
+
+    def delete_job(self, job_id: str) -> None:
+        self._json("DELETE", f"{self.api_root}/api/jobs/{job_id}")
+
+    def job_action(self, job_id: str, action: str) -> dict:
+        """action: pause | resume | run"""
+        return self._json("POST", f"{self.api_root}/api/jobs/{job_id}/{action}")
+
     def health(self) -> dict:
         try:
             return self._json("GET", f"{self.v1}/models")

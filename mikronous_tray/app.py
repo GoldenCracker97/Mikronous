@@ -97,6 +97,9 @@ class TrayApp(QObject):
         a = QAction("Settings…", menu)
         a.triggered.connect(lambda: (self.window.show_window(), self.window.open_settings()))
         menu.addAction(a)
+        a = QAction("Routines…", menu)
+        a.triggered.connect(lambda: (self.window.show_window(), self.window.open_settings("routines")))
+        menu.addAction(a)
         a = QAction("Open notes folder", menu)
         a.triggered.connect(self._open_notes)
         menu.addAction(a)
@@ -253,6 +256,9 @@ class TrayApp(QObject):
             elif cmd == "settings":
                 self.window.show_window()
                 self.window.open_settings()
+            elif cmd == "routines":
+                self.window.show_window()
+                self.window.open_settings("routines")
             elif cmd == "update":
                 self.window.show_window()
                 self.check_updates(interactive=True)
