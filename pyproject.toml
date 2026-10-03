@@ -16,7 +16,7 @@ tray = ["PySide6>=6.7"]
 # Hardware-fit tool (Phase 0.5) reads GGUF headers.
 model = ["gguf>=0.10"]
 # Running the test-suite (tests/).
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-timeout>=2.3"]
 
 [project.urls]
 Homepage = "https://github.com/GoldenCracker97/Mikronous"
@@ -36,3 +36,5 @@ packages = ["mikronous_cli", "mikronous_tray", "mikronous_model"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+timeout = 120
+timeout_method = "thread"
