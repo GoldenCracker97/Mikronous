@@ -27,6 +27,10 @@ def main(argv: list[str] | None = None) -> int:
     p_model = sub.add_parser("model", help="fit the local model to this hardware (detect/list/recommend/use/tune/status/bench)")
     p_model.set_defaults(func=lambda a: _model([]))
 
+    p_priv = sub.add_parser("privacy", help="what can leave the machine: status | offline | online")
+    p_priv.add_argument("action", nargs="?", default="status", choices=["status", "offline", "online"])
+    p_priv.set_defaults(func=lambda a: _privacy(a.action))
+
     p_tog = sub.add_parser("toggle", help="(not yet available; arrives in Phase 3)")
     p_tog.set_defaults(func=lambda a: _not_yet("toggle", "3"))
 
@@ -40,6 +44,11 @@ def main(argv: list[str] | None = None) -> int:
 def _model(rest: list[str]) -> int:
     from mikronous_model.cli import main as model_main
     return model_main(rest, prog="mik model")
+
+
+def _privacy(action: str) -> int:
+    from . import privacy
+    return privacy.main([action])
 
 
 def _not_yet(name: str, phase: str) -> int:

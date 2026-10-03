@@ -102,6 +102,16 @@ def run_checks() -> list[tuple[str, str, str]]:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         rows.append(("Hermes API", FAIL, f"{gw.v1} unreachable ({exc.__class__.__name__})"))
 
+    # 6. Local-only: nothing in this profile can reach a paid provider
+    try:
+        from . import privacy
+        prows = privacy.assess(privacy.load_config(), _read_env(PROFILE_HOME / ".env"))
+        bad = [r[0] for r in prows if r[1] == FAIL]
+        rows.append(("local-only", OK if not bad else FAIL, "model, logins, telemetry pinned local" if not bad
+                     else f"see `mik privacy status`: {', '.join(bad)}"))
+    except Exception as exc:  # noqa: BLE001 - never let the privacy probe break doctor
+        rows.append(("local-only", WARN, f"could not evaluate ({exc.__class__.__name__})"))
+
     return rows
 
 

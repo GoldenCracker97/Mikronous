@@ -56,6 +56,25 @@ cron:
 plugins:
   enabled: [mikronous]
 
+# ---------------------------------------------------------------------------
+# Local-only guarantees. Nothing here can enrol the user in a paid service:
+# - no fallback_providers / auxiliary overrides: side tasks use the local model or are skipped
+# - never borrow Claude Code / Codex logins found on the machine
+# - telemetry collection and upload both off (Hermes default, pinned)
+# - toolsets that only work with paid API keys or Nous-managed connectors are removed
+#   everywhere. `mik privacy offline` additionally removes web + browser.
+# ---------------------------------------------------------------------------
+auth:
+  adopt_external_logins: false
+
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
+
+agent:
+  disabled_toolsets: [connections, image_gen, video_gen, video, tts, x_search, vision]
+
 # The mikronous platform (our plugin) is where cron reminders are delivered.
 platforms:
   mikronous:

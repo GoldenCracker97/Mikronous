@@ -57,6 +57,16 @@ from `~/.hermes/profiles/mikronous/.env`. On older Hermes the profile gets its o
 `hermes-gateway-mikronous.service` and plain `http://127.0.0.1:8642/v1`. `mik doctor` prints
 whichever applies.
 
+## What leaves your machine
+
+| | |
+|---|---|
+| Model, memory, notes, documents, chat history | Never leave. The model is pinned to `llama-server` on `127.0.0.1:8081`; Hermes side tasks (summaries, titles) use the same model or are skipped. |
+| Web search and page extraction | Go out, like a browser would: DuckDuckGo for search, Hermes's keyless free tiers (Exa, Parallel, Firecrawl, Keenable) for page text. No account, no key, no identifiers. `mik privacy offline` turns both off. |
+| Paid services | Nothing can enrol you. Toolsets that only work with paid keys (`image_gen`, `video_gen`, `tts`, `x_search`, `vision`) and the Nous-managed `connections` toolset are disabled in the profile, Claude Code / Codex login borrowing is off, telemetry is off, and no fallback providers are configured. Nous Portal is only ever enabled by running `hermes setup --portal` yourself. |
+
+`mik privacy status` prints the live state of each line above; `mik doctor` includes it as the `local-only` row.
+
 ## Commands
 
 | Command | Purpose |
@@ -64,6 +74,7 @@ whichever applies.
 | `mikronous chat` | Talk to the assistant in the terminal (Hermes profile command) |
 | `mikronous gateway status` | Gateway (API server + cron) state |
 | `mik doctor` | One-screen health check of every piece |
+| `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `systemctl --user restart mikronous-llama` | Restart the model server after editing `~/.config/mikronous/llama.env` |
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
