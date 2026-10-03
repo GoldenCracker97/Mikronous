@@ -18,8 +18,9 @@ All notable changes to Mikronous are recorded here. The format follows
   installer without the model step, restart the tray. `--check` only reports, `--pull` skips the reinstall.
 
 ### Fixed
-- `web_extract` failed with "DuckDuckGo is a search-only backend": the profile pinned DuckDuckGo for search,
-  which left page extraction without a backend. Search and extraction now both use Hermes's keyless ring.
+- `web_extract` failed with "DuckDuckGo is a search-only backend": Hermes auto-detects DuckDuckGo once its
+  package is installed, leaving page extraction without a backend. The profile now pins DuckDuckGo for
+  search and Exa's keyless tier for extraction.
 
 ### Changed
 - The model server is managed through `mikronous_model.runner` (systemd on Linux, a detached process with a

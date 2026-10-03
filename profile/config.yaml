@@ -32,14 +32,18 @@ platform_toolsets:
   cron: [hermes-cron, mikronous]
 
 # ---------------------------------------------------------------------------
-# Internet: keyless. With no backend pinned and no API keys, Hermes serves BOTH web_search and
-# web_extract from its keyless free-tier ring (Exa / Parallel / Firecrawl / Keenable), rotating
-# and failing over between them; no account, no key, no identifiers sent. Do not pin
-# `search_backend: ddgs` here: DuckDuckGo is search-only and then web_extract has no backend.
-# Prefer DuckDuckGo anyway? Set `search_backend: ddgs` AND `extract_backend: exa`.
-# Fully private search: SEARXNG_URL in .env + `search_backend: searxng` (+ an extract backend).
+# Internet: keyless, no account. Hermes's free-tier ring (Exa / Parallel / Firecrawl / Keenable)
+# serves both tools when nothing is pinned, BUT once the `ddgs` package is installed Hermes
+# auto-detects DuckDuckGo, which is search-only, and web_extract then fails ("cannot extract URL
+# content"). So pin the two capabilities explicitly: DuckDuckGo for search, Exa's keyless tier for
+# page extraction (falls over to the rest of the ring on throttling). No identifiers are sent.
+# Fully private search: SEARXNG_URL in .env + `search_backend: searxng`.
 # ---------------------------------------------------------------------------
 web:
+  search_backend: ddgs
+  extract_backend: exa
+  provider_tier:
+    exa: free            # never silently switch to a paid key
   keyless_fallback: true
 
 # ---------------------------------------------------------------------------
