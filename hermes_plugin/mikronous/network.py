@@ -43,6 +43,8 @@ def parse_ip_neigh(text: str) -> list[dict]:
         if not parts:
             continue
         ip = parts[0]
+        if ":" in ip:          # IPv6 neighbours (fe80::...) are the same devices again; keep the IPv4 view
+            continue
         mac = parts[parts.index("lladdr") + 1].lower() if "lladdr" in parts and parts.index("lladdr") + 1 < len(parts) else ""
         state = parts[-1] if parts[-1].isupper() else ""
         if state in ("FAILED", "INCOMPLETE") or not mac:
@@ -111,6 +113,14 @@ def _reverse_name(ip: str) -> str:
     return ""
 
 
+def _sort_key(ip: str) -> tuple:
+    try:
+        addr = ipaddress.ip_address(ip)
+        return (addr.version, int(addr))
+    except ValueError:
+        return (9, 0)
+
+
 def lan_devices(args: dict, **_: Any) -> dict:
     scan = bool(args.get("scan", False))
     swept = 0
@@ -126,7 +136,7 @@ def lan_devices(args: dict, **_: Any) -> dict:
     seen: dict[str, dict] = {}
     for d in devices:
         seen.setdefault(d["ip"], d)
-    devices = sorted(seen.values(), key=lambda d: tuple(int(x) for x in d["ip"].split(".")))
+    devices = sorted(seen.values(), key=lambda d: _sort_key(d["ip"]))
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
         names = list(pool.map(lambda d: _reverse_name(d["ip"]), devices))
     for d, n in zip(devices, names):

@@ -9,11 +9,13 @@ from mikronous import network
 
 
 def test_parse_ip_neigh_and_arp():
-    neigh = ("192.168.1.1 dev wlan0 lladdr 11:22:33:44:55:66 REACHABLE\n"
+    neigh = ("192.168.1.20 dev wlan0 lladdr aa:bb:cc:dd:ee:ff STALE\n"
              "192.168.1.9 dev wlan0  FAILED\n"
-             "192.168.1.20 dev wlan0 lladdr aa:bb:cc:dd:ee:ff STALE\n")
+             "fe80::cea:14ff:fe86:bf9b dev wlan0 lladdr 11:22:33:44:55:66 router REACHABLE\n"
+             "192.168.1.1 dev wlan0 lladdr 11:22:33:44:55:66 REACHABLE\n")
     rows = network.parse_ip_neigh(neigh)
-    assert [r["ip"] for r in rows] == ["192.168.1.1", "192.168.1.20"] and rows[1]["mac"] == "aa:bb:cc:dd:ee:ff"
+    assert [r["ip"] for r in rows] == ["192.168.1.20", "192.168.1.1"] and rows[0]["mac"] == "aa:bb:cc:dd:ee:ff"
+    assert [network._sort_key(r["ip"]) for r in rows] == sorted(network._sort_key(r["ip"]) for r in rows)[::-1]
     arp = ("Interface: 192.168.1.5 --- 0xb\n"
            "  Internet Address      Physical Address      Type\n"
            "  192.168.1.1           11-22-33-44-55-66     dynamic\n"
