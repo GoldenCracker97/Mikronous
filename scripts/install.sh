@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Mikronous installer (Phase 0): Hermes profile + plugin + mik CLI + local llama-server + gateway service.
+# Mikronous installer: Hermes profile + plugin + mik CLI + local llama-server + gateway service + tray app.
 # Idempotent: re-running updates config in place and never overwrites secrets, memories, or an edited SOUL.md.
 #
 #   scripts/install.sh            # everything
 #   scripts/install.sh --no-model # skip model download / llama-server (already have one on :8081)
+#   scripts/install.sh --no-tray  # skip the tray app (PySide6) and the Meta+Space shortcut
 #
 # Afterwards: `mik doctor` shows what is running.
 set -uo pipefail
@@ -16,11 +17,13 @@ CONF_DIR="$HOME/.config/mikronous"
 UNIT_DIR="$HOME/.config/systemd/user"
 MODEL_FILE="${MIKRONOUS_MODEL_FILE:-Qwen3-4B-Instruct-2507-Q4_K_M.gguf}"
 WITH_MODEL=1
+WITH_TRAY=1
 FAILURES=()
 for arg in "$@"; do
   case "$arg" in
     --no-model) WITH_MODEL=0 ;;
-    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    --no-tray) WITH_TRAY=0 ;;
+    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -109,13 +112,15 @@ install_mik_venv() {
     curl -fsSL https://bootstrap.pypa.io/get-pip.py | "$venv/bin/python" - >/dev/null 2>&1 || return 1
   fi
   "$venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
-  "$venv/bin/pip" install --quiet --editable "$REPO_DIR" >/dev/null 2>&1 || return 1
+  "$venv/bin/pip" install --quiet --editable "$REPO_DIR$MIK_EXTRAS" >/dev/null 2>&1 || return 1
   mkdir -p "$HOME/.local/bin" && ln -sfn "$venv/bin/mik" "$HOME/.local/bin/mik"
 }
+# The tray app needs PySide6 (~150 MB); it is an optional extra so headless installs stay small.
+MIK_EXTRAS=""; [[ "$WITH_TRAY" == 1 ]] && MIK_EXTRAS="[tray]"
 if command -v uv >/dev/null 2>&1; then
-  (cd "$REPO_DIR" && uv tool install --force --editable . >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
+  (cd "$REPO_DIR" && uv tool install --force --editable ".$MIK_EXTRAS" >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
 elif command -v pipx >/dev/null 2>&1; then
-  pipx install --force --editable "$REPO_DIR" >/dev/null 2>&1 && echo "installed: mik (pipx)" || fail "pipx install failed"
+  pipx install --force --editable "$REPO_DIR$MIK_EXTRAS" >/dev/null 2>&1 && echo "installed: mik (pipx)" || fail "pipx install failed"
 elif install_mik_venv; then
   echo "installed: mik (venv at ~/.local/share/mikronous/venv -> ~/.local/bin/mik)"
 else
@@ -233,6 +238,34 @@ case "$GATEWAY_MODE" in
 esac
 
 # ---------------------------------------------------------------------------
+if [[ "$WITH_TRAY" == 1 ]]; then
+  step "Tray app (Meta+Space chat window)"
+  if command -v mik >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/mik" ]]; then
+    MIK="$(command -v mik || echo "$HOME/.local/bin/mik")"
+    if "$MIK" tray --help >/dev/null 2>&1; then
+      APPS="$HOME/.local/share/applications"; ICONS="$HOME/.local/share/icons/hicolor/scalable/apps"
+      mkdir -p "$APPS" "$ICONS" "$HOME/.config/autostart"
+      sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous.desktop" > "$APPS/mikronous.desktop"
+      sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous-tray-autostart.desktop" > "$HOME/.config/autostart/mikronous-tray.desktop"
+      cp "$REPO_DIR/packaging/mikronous.svg" "$ICONS/mikronous.svg"
+      command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 >/dev/null 2>&1 || true
+      command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
+      echo "installed: $APPS/mikronous.desktop (Meta+Space), autostart entry, icon"
+      if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+        "$MIK" show >/dev/null 2>&1 && echo "tray started (look for the blue M in the system tray)" \
+          || fail "tray did not start; run: mik tray   (in a terminal) to see the error"
+      else
+        echo "no display in this shell; start it later with: mik tray"
+      fi
+    else
+      fail "PySide6 missing in the mik environment; re-run without --no-tray or: pip install 'PySide6>=6.7' into it"
+    fi
+  else
+    fail "mik is not installed, skipping tray"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 step "Done"
 if (( ${#FAILURES[@]} )); then
   echo "Finished with ${#FAILURES[@]} problem(s):"
@@ -243,5 +276,7 @@ fi
 echo
 echo "Check everything:   mik doctor   (or: python3 -m mikronous_cli doctor)"
 echo "Talk to it now:     hermes -p $PROFILE chat   (or just: mikronous chat)"
+[[ "$WITH_TRAY" == 1 ]] && echo "Desktop:            Meta+Space toggles the chat window (or: mik toggle). If the shortcut is not"
+[[ "$WITH_TRAY" == 1 ]] && echo "                    active yet: System Settings > Shortcuts > add 'Mikronous', or log out and in."
 echo "API server:         $API_URL  (Bearer key: API_SERVER_KEY in $PROFILE_HOME/.env)"
 (( ${#FAILURES[@]} == 0 ))

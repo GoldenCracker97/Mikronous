@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mikronous
+GenericName=Desktop assistant
+Comment=Local AI assistant: show or hide the chat window
+Exec=mik toggle
+Icon=mikronous
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-KDE-Shortcuts=Meta+Space

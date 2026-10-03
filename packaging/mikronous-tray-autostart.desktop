@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mikronous Tray
+Comment=Start the Mikronous tray icon at login
+Exec=mik tray
+Icon=mikronous
+Terminal=false
+X-KDE-autostart-after=panel
+X-KDE-StartupNotify=false

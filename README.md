@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 2 complete** — profile, local model server, gateway, hardware-fit tool, desktop tools, reminders delivered as KDE notifications (verified end to end). Next: Phase 3 tray app.
+Status: **Phase 3** — everything below is in place; the tray app is new and being verified on a real Plasma desktop.
 
 ## What you get
 
@@ -17,7 +17,7 @@ Status: **Phase 2 complete** — profile, local model server, gateway, hardware-
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`, `set_reminder`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
 | `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications (and in `~/.local/share/mikronous/inbox.jsonl`) | 2 ✓ |
-| Tray app | Hotkey (`Meta+Space`) chat window, streaming, approval cards | 3 |
+| Tray app (`mik tray`) | Hotkey (`Meta+Space`) chat window: streaming replies, tool activity, approval cards, reminders inbox | 3 |
 
 ## Install (Linux, KDE Plasma)
 
@@ -30,10 +30,11 @@ scripts/install.sh
 mik doctor
 ```
 
-The installer creates the Hermes profile, links the plugin, installs the `mik` CLI, downloads a
-prebuilt `llama-server` from the llama.cpp nightly releases, downloads the default model
-(Qwen3-4B-Instruct Q4_K_M, ~2.5 GB) into `~/.hermes/models`, and starts two user services:
-`mikronous-llama` and `hermes-gateway-mikronous`.
+The installer creates the Hermes profile, links the plugin, installs the `mik` CLI (with PySide6 for
+the tray), downloads a prebuilt `llama-server` from the llama.cpp nightly releases, downloads the
+default model (Qwen3-4B-Instruct Q4_K_M, ~2.5 GB) into `~/.hermes/models`, starts two user services
+(`mikronous-llama` and `hermes-gateway-mikronous`), and starts the tray with a `Meta+Space`
+shortcut and an autostart entry. `--no-tray` skips the desktop part.
 
 The llama.cpp backend is picked from your hardware, no CUDA toolkit needed:
 
@@ -72,6 +73,8 @@ reminder delivery), so the profile stays standalone. Your default profile's gate
 
 | Command | Purpose |
 |---|---|
+| `Meta+Space` / `mik toggle` | Show or hide the chat window (starts the tray if needed) |
+| `mik tray` | Run the tray app in the foreground (to see errors) |
 | `mikronous chat` | Talk to the assistant in the terminal (Hermes profile command) |
 | `mikronous gateway status` | Gateway (API server + cron) state |
 | `mik ask "…"` | One question through the gateway with the full toolset (`--session <id>` to continue) |
@@ -83,6 +86,23 @@ reminder delivery), so the profile stays standalone. Your default profile's gate
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
 `mik` is this project's own CLI.
+
+## The tray app
+
+`mik tray` puts a blue **M** in the system tray. `Meta+Space` (or a click on the icon, or
+`mik toggle`) shows the chat window; `Esc` hides it. Replies stream in from the local model, tool
+calls show as small grey lines, and when Hermes wants approval for a command an approval card
+appears with the choices Hermes offers (`Allow once`, `Allow this session`, `Deny`). Reminders
+and other cron output arrive in the window too (the plugin pushes them over
+`$XDG_RUNTIME_DIR/mikronous.sock`), on top of the KDE notification.
+
+The window talks to the same gateway as `mik ask`: `POST /v1/runs` plus the run's SSE event
+stream, with one Hermes session per chat (`New chat` in the tray menu starts another; the current
+one survives restarts via `~/.config/mikronous/tray.json` and is reloaded from the gateway).
+
+If `Meta+Space` does nothing after the install, the shortcut from
+`~/.local/share/applications/mikronous.desktop` has not been picked up yet: log out and in, or add
+it in System Settings → Shortcuts → Add → Mikronous.
 
 ## Desktop tools the agent gets
 
@@ -98,7 +118,7 @@ reminder delivery), so the profile stays standalone. Your default profile's gate
 **Reminders.** "Remind me in 20 minutes to …" or "every weekday at 9 …" makes the agent call
 `set_reminder`, which creates a Hermes cron job (no model involved when it fires) delivered to the
 `mikronous` platform: a KDE notification, plus a line in
-`~/.local/share/mikronous/inbox.jsonl` (and the tray window once Phase 3 lands) so nothing is
+`~/.local/share/mikronous/inbox.jsonl` and the tray window, so nothing is
 lost while you are away. `mikronous cron list` shows the jobs. Reminders are created from chat
 sessions (the tray, `mikronous chat`, or `mik ask "…"`); Hermes hides the scheduling tool in
 `mikronous -z` one-shots by design.
@@ -139,9 +159,10 @@ installed from git.
 ```
 profile/            Hermes profile template (SOUL.md, config.yaml, env.example)
 hermes_plugin/      The `mikronous` Hermes plugin (tools + delivery platform)
-mikronous_cli/      `mik` CLI (doctor, model, toggle)
-mikronous_model/    hardware-fit library used by `mik model` and the tray (Phase 0.5)
-mikronous_tray/     PySide6 tray app (Phase 3)
+mikronous_cli/      `mik` CLI (doctor, ask, tools, privacy, docs, model, tray, toggle)
+mikronous_model/    hardware-fit library used by `mik model`
+mikronous_tray/     PySide6 tray app: chat window, runs/SSE client, reminder inbox socket
+packaging/          .desktop files (Meta+Space shortcut, autostart) and icon
 skills/             Skills shipped with Mikronous
 systemd/            User units + env template
 scripts/            install.sh, install-llama.sh, fetch-model.sh

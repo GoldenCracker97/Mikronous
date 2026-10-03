@@ -2,8 +2,9 @@
 
 Subcommands:
   doctor   Check that every Mikronous piece is installed and running.
-  model    (Phase 0.5) Fit the local model to this machine's hardware.
-  toggle   (Phase 3) Show/hide the tray chat window.
+  model    Fit the local model to this machine's hardware.
+  tray     Run the tray app (chat window + hotkey target).
+  toggle   Show/hide the tray chat window (starts the tray if needed).
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "tools":
         from . import tools_cmd
         return tools_cmd.main(argv[1:])
+    if argv and argv[0] in ("tray", "toggle", "show", "hide", "quit-tray"):
+        from mikronous_tray.__main__ import main as tray_main
+        return tray_main(argv[1:] if argv[0] == "tray" else ["quit" if argv[0] == "quit-tray" else argv[0]])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")
     sub = parser.add_subparsers(dest="cmd")
 
@@ -47,8 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     p_docs.add_argument("rest", nargs=argparse.REMAINDER)
     p_docs.set_defaults(func=lambda a: _docs(a.rest))
 
-    p_tog = sub.add_parser("toggle", help="(not yet available; arrives in Phase 3)")
-    p_tog.set_defaults(func=lambda a: _not_yet("toggle", "3"))
+    sub.add_parser("tray", help="run the tray app (chat window, Meta+Space target, reminder inbox)")
+    sub.add_parser("toggle", help="show/hide the chat window; starts the tray when it is not running")
 
     args = parser.parse_args(argv)
     if not args.cmd:
@@ -70,11 +74,6 @@ def _docs(rest: list[str]) -> int:
 def _privacy(action: str) -> int:
     from . import privacy
     return privacy.main([action])
-
-
-def _not_yet(name: str, phase: str) -> int:
-    print(f"`mik {name}` is planned for Phase {phase} and is not implemented yet.", file=sys.stderr)
-    return 2
 
 
 if __name__ == "__main__":
