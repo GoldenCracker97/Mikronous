@@ -80,7 +80,9 @@ telemetry:
     send: false
 
 agent:
-  disabled_toolsets: [connections, image_gen, video_gen, video, tts, x_search, vision]
+  # cronjob is hidden on purpose: set_reminder (our plugin) is the only scheduler the model
+  # sees. The cron engine itself keeps running; `hermes cron` and /cron still work for you.
+  disabled_toolsets: [connections, image_gen, video_gen, video, tts, x_search, vision, cronjob]
 
 # The mikronous platform (our plugin) is where cron reminders are delivered.
 platforms:

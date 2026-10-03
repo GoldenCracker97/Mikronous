@@ -8,7 +8,7 @@ platforms: [linux]
 metadata:
   hermes:
     tags: [productivity, notes, briefing]
-    requires_toolsets: [mikronous, cronjob]
+    requires_toolsets: [mikronous]
 ---
 
 # Daily briefing
@@ -18,7 +18,7 @@ The user asks for a briefing, "what's on today", "catch me up", or a cron job na
 
 ## Procedure
 1. `notes_manage` with `action: list`, `status: open` — collect open items; note any with `due` today or overdue.
-2. `cronjob_manage` with `action: list` — upcoming reminders in the next 24 h.
+2. `set_reminder` with `action: list` — upcoming reminders.
 3. If the user keeps a calendar export or journal in their documents, `docs_search` for today's date (`YYYY-MM-DD`) and skim the best hit with `read_file`.
 4. Write at most eight lines: overdue first, then due today, then upcoming reminders, then one suggested first task. No preamble.
 5. When invoked by cron, deliver with `desktop_notify` (title "Good morning", body = the briefing) in addition to the reply.
@@ -28,4 +28,4 @@ The user asks for a briefing, "what's on today", "catch me up", or a cron job na
 - Keep each line under ~90 characters; it is read in a small window or a notification.
 
 ## Verification
-Every item mentioned exists in `notes_manage list` or `cronjob_manage list` output from this session.
+Every item mentioned exists in `notes_manage list` or `set_reminder list` output from this session.

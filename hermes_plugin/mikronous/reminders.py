@@ -195,7 +195,13 @@ _REMIND_WORDS = re.compile(r"remind|notify|notification|alarm|alert|stretch|time
 
 
 def guard_terminal_reminders(tool_name: str = "", args: dict | None = None, **_: Any):
-    """pre_tool_call hook: stop `sleep N && notify...` style reminders in the terminal tool."""
+    """pre_tool_call hook: stop `sleep N && notify...` style reminders in the terminal tool, and
+    direct cronjob_manage calls (set_reminder is the one scheduler this profile exposes)."""
+    if tool_name == "cronjob_manage":
+        return {"action": "block",
+                "message": ("Blocked: use the set_reminder tool for reminders and schedules, e.g. "
+                            "set_reminder(action='create', when='in 2 minutes', message='Stretch'); "
+                            "set_reminder(action='list') / (action='cancel', id=...) manage them.")}
     if tool_name != "terminal" or not isinstance(args, dict):
         return None
     cmd = str(args.get("command") or "")
