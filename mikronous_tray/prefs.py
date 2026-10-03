@@ -45,6 +45,7 @@ class Prefs:
     stt_model: str = "base"
     tts: bool = False
     tts_voice: str = "en_US-lessac-medium"
+    semantic: bool = False
 
     def changed_from(self, other: "Prefs") -> list[str]:
         return [f.name for f in fields(self) if getattr(self, f.name) != getattr(other, f.name)]
@@ -72,6 +73,11 @@ def read() -> Prefs:
     p.stt_model = str(st.get("stt_model") or Prefs.stt_model)
     p.tts = bool(st.get("tts", False))
     p.tts_voice = str(st.get("tts_voice") or Prefs.tts_voice)
+    try:
+        from mikronous_cli import embed
+        p.semantic = embed.enabled()
+    except Exception:  # noqa: BLE001
+        p.semantic = False
     return p
 
 
@@ -123,6 +129,8 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
         privacy.save_config(cfg)
     if "docs_dirs" in changed:
         _write_env_var(PROFILE_ENV, "MIKRONOUS_DOCS_DIRS", new.docs_dirs.strip())
+    if "semantic" in changed:
+        start_embed_toggle(new.semantic)
     tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang",
                                                  "hotkey_vox", "stt_model", "tts", "tts_voice") if k in changed}
     if tray_changes:
@@ -132,6 +140,18 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
 
 def needs_gateway_restart(changed: list[str]) -> bool:
     return any(k in GATEWAY_KEYS for k in changed)
+
+
+def start_embed_toggle(on: bool) -> None:
+    """`mik embed on|off` detached (the download + first embedding pass can take minutes); logs to the conf dir."""
+    from mikronous_cli.paths import CONF_DIR
+    log = open(CONF_DIR / "embed-setup.log", "ab")  # noqa: SIM115 - handed to the child
+    kw: dict = {"stdout": log, "stderr": subprocess.STDOUT, "stdin": subprocess.DEVNULL}
+    if IS_WINDOWS:
+        kw["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kw["start_new_session"] = True
+    subprocess.Popen([sys.executable, "-m", "mikronous_cli", "embed", "on" if on else "off"], **kw)
 
 
 def restart_gateway() -> tuple[bool, str]:

@@ -1,0 +1,17 @@
+[Unit]
+Description=Mikronous embedding server for semantic file search (llama.cpp, CPU)
+Documentation=https://github.com/GoldenCracker97/Mikronous
+After=default.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/mikronous/embed.env
+ExecStart=/bin/sh -c 'export LD_LIBRARY_PATH="$(dirname "${EMBED_SERVER}")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; \
+    exec "${EMBED_SERVER}" --host 127.0.0.1 --port "${EMBED_PORT}" -m "${EMBED_MODEL}" --alias mikronous-embed \
+    --embeddings --pooling "${EMBED_POOLING}" -c "${EMBED_CTX}" -ub "${EMBED_CTX}" -b "${EMBED_CTX}" -ngl 0 -t "${EMBED_THREADS}"'
+Restart=on-failure
+RestartSec=3
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target

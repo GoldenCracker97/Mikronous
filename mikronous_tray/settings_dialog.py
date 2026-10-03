@@ -69,6 +69,11 @@ class SettingsDialog(QDialog):
         self.docs_dirs.setPlaceholderText("~/Documents, ~/Projects")
         form.addRow("File search", self.docs_dirs)
         form.addRow("", _hint("Folders the file search indexes, comma-separated. Applies after the gateway restarts."))
+        self.semantic = QCheckBox("semantic search (finds meaning, not just words)")
+        self.semantic.setChecked(current.semantic)
+        form.addRow("", self.semantic)
+        form.addRow("", _hint("Runs a small CPU embedding model (~150 MB, downloaded once) next to the main one; the first pass "
+                              "over your folders takes a few minutes in the background. Log: embed-setup.log in the config dir."))
 
         form.addRow(_rule())
         from . import voice_io
@@ -159,6 +164,7 @@ class SettingsDialog(QDialog):
             stt_model=self.stt_model.currentData(),
             tts=self.tts.isChecked(),
             tts_voice=self.tts_voice.text().strip() or self._initial.tts_voice,
+            semantic=self.semantic.isChecked(),
         )
 
 

@@ -147,6 +147,15 @@ def run_checks() -> list[tuple[str, str, str]]:
         rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
                      else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
 
+    # 7b. Semantic search (optional embedding server)
+    try:
+        from . import embed
+        if embed.enabled():
+            rows.append(("semantic search", OK if embed.answers() else WARN,
+                         f"embedding server {embed.url()} {'answers' if embed.answers() else 'not answering (mik embed on)'}"))
+    except Exception:  # noqa: BLE001
+        pass
+
     # 8. Voice (optional extra)
     try:
         from mikronous_tray import voice_io

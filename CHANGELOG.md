@@ -22,6 +22,9 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
 - **Tray: drop files or folders** onto the window to attach their paths to the next message.
+- **Semantic file search** (`mik embed on`, Settings toggle): CPU embedding server (`mikronous-embed.service` / detached
+  process, nomic-embed-text-v1.5 Q8_0 on :8082), chunk vectors in `docs.sqlite`, BM25 ∪ cosine fused by reciprocal rank;
+  `mik docs reindex --embed`, `mik docs status` shows chunks, `mik doctor` row. Runner now manages named servers.
 - **Ask about my screen**: `SCREEN` button / `Meta+Shift+S` / `mik screen` captures a region (Spectacle, Qt fallback) and
   sends it with the question through the session chat stream; vision presets (`qwen3-vl-4b-instruct`,
   `qwen3-vl-8b-instruct`) with projector download, `LLAMA_MMPROJ` in llama.env/unit/runner, `mik model recommend

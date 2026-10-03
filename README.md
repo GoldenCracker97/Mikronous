@@ -153,6 +153,7 @@ please report what breaks.
 | `mik tools` | Toolsets the gateway exposes to the assistant |
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
+| `mik embed on\|off\|status` | Semantic file search: a small CPU embedding server (nomic-embed-text, :8082) |
 | `mik voice [plain\|light\|full]` | How much machine-priest the assistant speaks |
 | `Alt+Space` → `mik <question>` | Ask from KRunner without opening the window; the answer arrives as a notification |
 | `mik settings` / `mik chats` / `mik routines` | Open the tray's Settings dialog / toggle the past-chats pane / open the Routines tab |
@@ -184,6 +185,13 @@ model stays loaded on Quit, and on Windows the hotkey. Changes that the gateway 
 checks GitHub and, when there are new commits, offers to pull, re-install and restart the tray (the
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
+
+**Semantic file search.** Settings → *semantic search* (or `mik embed on`) starts a second, CPU-only
+llama-server with a 150 MB embedding model and splits every indexed document into chunks with
+vectors. File questions then match meaning, not just words: "the document about renewing my car
+insurance" finds the policy letter that never says "car insurance". Keyword and semantic ranks are
+fused, so exact names and numbers still win when you use them. `mik embed off` removes it; the GPU
+model is untouched either way.
 
 **Ask about the screen.** Needs a model that sees: `mik model recommend --vision --apply` (Qwen3-VL
 4B for 8 GB cards, 8B for 12 GB; the projector file downloads with it, and the profile is told the

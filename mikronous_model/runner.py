@@ -25,6 +25,23 @@ UNIT = "mikronous-llama.service"
 PID_FILE = conf_dir() / "llama-server.pid"
 LOG_FILE = conf_dir() / "llama-server.log"
 
+# A second, CPU-only llama-server provides embeddings for semantic file search (mikronous_cli.embed).
+SERVERS = {
+    "llama": {"unit": UNIT, "pid": PID_FILE, "log": LOG_FILE},
+    "embed": {"unit": "mikronous-embed.service", "pid": conf_dir() / "embed-server.pid", "log": conf_dir() / "embed-server.log"},
+}
+
+
+def server(name: str) -> dict:
+    return SERVERS[name]
+
+
+def embed_command_line(env: dict[str, str]) -> list[str]:
+    ctx = env.get("EMBED_CTX", "2048")
+    return [env.get("EMBED_SERVER", "llama-server"), "--host", "127.0.0.1", "--port", env.get("EMBED_PORT", "8082"),
+            "-m", env.get("EMBED_MODEL", ""), "--alias", "mikronous-embed", "--embeddings", "--pooling", env.get("EMBED_POOLING", "mean"),
+            "-c", ctx, "-ub", ctx, "-b", ctx, "-ngl", "0", "-t", env.get("EMBED_THREADS", "4")]
+
 
 def command_line(env: dict[str, str] | None = None) -> list[str]:
     """The llama-server invocation the systemd unit uses, built from llama.env."""
@@ -104,60 +121,75 @@ def mode() -> str:
     return "process" if IS_WINDOWS else "systemd"
 
 
-def is_running() -> bool:
+def _read_pid_of(name: str) -> int:
+    try:
+        return int(SERVERS[name]["pid"].read_text().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def _cmd_for(name: str) -> list[str]:
+    if name == "embed":
+        from mikronous_cli.embed import env as embed_env
+        return embed_command_line(embed_env())
+    return command_line(read_env(LLAMA_ENV))
+
+
+def is_running(name: str = "llama") -> bool:
     if IS_WINDOWS:
-        return _pid_alive(_read_pid()) or answers()
-    r = _systemctl("is-active", UNIT)
+        return _pid_alive(_read_pid_of(name)) or (answers() if name == "llama" else False)
+    r = _systemctl("is-active", SERVERS[name]["unit"])
     return bool(r) and r.stdout.strip() in ("active", "activating")
 
 
-def start() -> bool:
+def start(name: str = "llama") -> bool:
+    srv = SERVERS[name]
     if IS_WINDOWS:
-        if is_running():
+        if is_running(name):
             return True
-        env = read_env(LLAMA_ENV)
-        cmd = command_line(env)
+        cmd = _cmd_for(name)
         exe = Path(cmd[0])
         if not exe.exists():
             print(f"llama-server not found: {exe}", file=sys.stderr)
             return False
         conf_dir().mkdir(parents=True, exist_ok=True)
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        log = open(LOG_FILE, "ab")  # noqa: SIM115 - handed to the child
+        log = open(srv["log"], "ab")  # noqa: SIM115 - handed to the child
         try:
             proc = subprocess.Popen(cmd, cwd=str(exe.parent), stdout=log, stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
         except OSError as exc:
             print(f"could not start llama-server: {exc}", file=sys.stderr)
             return False
-        PID_FILE.write_text(str(proc.pid))
+        srv["pid"].write_text(str(proc.pid))
         return True
     _systemctl("daemon-reload")
-    r = _systemctl("start", UNIT)
+    r = _systemctl("start", srv["unit"])
     return bool(r) and r.returncode == 0
 
 
-def stop() -> bool:
+def stop(name: str = "llama") -> bool:
+    srv = SERVERS[name]
     if IS_WINDOWS:
-        pid = _read_pid()
+        pid = _read_pid_of(name)
         if pid and _pid_alive(pid):
             subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
         try:
-            PID_FILE.unlink()
+            srv["pid"].unlink()
         except OSError:
             pass
         return True
-    r = _systemctl("stop", UNIT)
+    r = _systemctl("stop", srv["unit"])
     return bool(r) and r.returncode == 0
 
 
-def restart() -> bool:
+def restart(name: str = "llama") -> bool:
     if IS_WINDOWS:
-        stop()
+        stop(name)
         time.sleep(1.0)
-        return start()
+        return start(name)
     _systemctl("daemon-reload")
-    r = _systemctl("restart", UNIT)
+    r = _systemctl("restart", SERVERS[name]["unit"])
     return bool(r) and r.returncode == 0
 
 
@@ -174,15 +206,18 @@ def wait_until_up(timeout: float = 180.0, progress=None) -> bool:
     return False
 
 
-def recent_log(lines: int = 25) -> str:
+def recent_log(lines: int = 25, name: str = "llama") -> str:
+    srv = SERVERS[name]
     if IS_WINDOWS:
         try:
-            return "\n".join(LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
+            return "\n".join(srv["log"].read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
         except OSError:
             return ""
-    r = subprocess.run(["journalctl", "--user", "-u", UNIT, "-n", str(lines), "--no-pager"], capture_output=True, text=True)
+    r = subprocess.run(["journalctl", "--user", "-u", srv["unit"], "-n", str(lines), "--no-pager"], capture_output=True, text=True)
     return r.stdout
 
 
-def restart_hint() -> str:
-    return "mik model restart" if IS_WINDOWS else "systemctl --user restart mikronous-llama"
+def restart_hint(name: str = "llama") -> str:
+    if IS_WINDOWS:
+        return "mik model restart" if name == "llama" else "mik embed on"
+    return f"systemctl --user restart {SERVERS[name]['unit'].removesuffix('.service')}"

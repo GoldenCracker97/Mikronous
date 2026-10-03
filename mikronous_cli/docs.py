@@ -30,12 +30,15 @@ def main(argv: list[str]) -> int:
         print(f"folders   {', '.join(s['dirs']) or '(none exist; set MIKRONOUS_DOCS_DIRS)'}")
         print(f"indexed   {s['files']} files ({s['errors']} with extraction errors)")
         print(f"refreshed {age}\nindex     {s['db']}")
+        print(f"semantic  {'on: ' + str(s['chunks']) + ' chunks over ' + str(s['files_embedded']) + ' files' if s['semantic'] else 'off (mik embed on)'}")
         return 0
     if cmd == "reindex":
         force = "--force" in argv
         print(f"indexing {', '.join(str(d) for d in di.docs_dirs())} ...", file=sys.stderr)
-        st = di.reindex(force=force)
-        print(f"scanned {st.scanned}, indexed {st.indexed}, removed {st.removed}, errors {st.errors}, {st.seconds}s")
+        st = di.reindex(force=force, embed_missing="--embed" in argv or di.embed_enabled())
+        print(f"scanned {st.scanned}, indexed {st.indexed}, removed {st.removed}, errors {st.errors}, {st.seconds}s"
+              + (f", embedded {st.embedded}" if st.embedded or st.embed_skipped else "")
+              + (" (embedding server not answering; run mik embed status)" if st.embed_skipped else ""))
         if st.errors:
             print("(PDF/Office extraction needs Hermes's extractor; inside Hermes sessions those files index fine)")
         return 0
@@ -43,5 +46,5 @@ def main(argv: list[str]) -> int:
         for h in di.search(" ".join(argv[1:])):
             print(f"{h['score']:6.2f}  {h['path']}\n        {h['snippet']}")
         return 0
-    print("usage: mik docs [status|reindex [--force]|search <query>]", file=sys.stderr)
+    print("usage: mik docs [status|reindex [--force] [--embed]|search <query>]", file=sys.stderr)
     return 2
