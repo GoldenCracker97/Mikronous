@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 3** — everything below is in place; the tray app is new and being verified on a real Plasma desktop.
+Status: **Phase 3 complete** — everything below works on a real Plasma 5.27 desktop: tray, `Meta+Space`, streaming chat, reminders in the window and as popups. Next: polish (approval card on a real gated command, docs, first-run checks).
 
 ## What you get
 
@@ -17,7 +17,7 @@ Status: **Phase 3** — everything below is in place; the tray app is new and be
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`, `set_reminder`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
 | `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications (and in `~/.local/share/mikronous/inbox.jsonl`) | 2 ✓ |
-| Tray app (`mik tray`) | Hotkey (`Meta+Space`) chat window: streaming replies, tool activity, approval cards, reminders inbox | 3 |
+| Tray app (`mik tray`) | Hotkey (`Meta+Space`) chat window: streaming replies, tool activity, approval cards, reminders inbox | 3 ✓ |
 
 ## Install (Linux, KDE Plasma)
 
