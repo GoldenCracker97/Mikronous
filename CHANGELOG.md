@@ -22,6 +22,10 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
 - **Tray: drop files or folders** onto the window to attach their paths to the next message.
+- **Ask about my screen**: `SCREEN` button / `Meta+Shift+S` / `mik screen` captures a region (Spectacle, Qt fallback) and
+  sends it with the question through the session chat stream; vision presets (`qwen3-vl-4b-instruct`,
+  `qwen3-vl-8b-instruct`) with projector download, `LLAMA_MMPROJ` in llama.env/unit/runner, `mik model recommend
+  --vision`, `mik model sync-config` keeps `model.supports_vision` in the profile.
 - **Voice input and output** (`[voice]` extra, `install.sh --voice` / `install.ps1 -VoiceInput`): hold VOX or tap
   `Meta+Shift+V` (`Ctrl+Alt+V`), faster-whisper transcribes locally (size in Settings); optional Piper read-aloud.
   Linux records with pw-record/parecord/arecord, Windows with sounddevice. `mik doctor` voice row.

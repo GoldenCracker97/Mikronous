@@ -22,6 +22,7 @@ DEFAULTS = {
     "hotkey_selection": "Ctrl+Alt+Shift+Space",   # Windows: selected-text actions (KDE: Meta+Shift+Space via installer)
     "translate_lang": "English",    # target of the Translate action
     "hotkey_vox": "Ctrl+Alt+V",     # Windows: tap to start/stop voice input (KDE: Meta+Shift+V via installer)
+    "hotkey_screen": "Ctrl+Alt+S",  # Windows: capture the screen and ask (KDE: Meta+Shift+S via installer)
     "stt_model": "base",            # faster-whisper size: tiny | base | small | turbo
     "tts": False,                   # read replies aloud with Piper
     "tts_voice": "en_US-lessac-medium",

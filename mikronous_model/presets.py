@@ -33,10 +33,16 @@ class Preset:
     notes: str = ""
     tags: list[str] = field(default_factory=list)
     source: str = "mikronous"
+    mmproj: str = ""              # substring of the vision projector file in the same repo ("mmproj"); "" = text-only
+    mmproj_bytes: int = 0         # its size, counted into the memory budget
+
+    @property
+    def vision(self) -> bool:
+        return bool(self.mmproj)
 
     def meta(self, file_bytes: int | None = None) -> GGUFMeta:
         return GGUFMeta(
-            path=f"hf:{self.repo}", file_bytes=file_bytes or self.approx_bytes, arch=self.id, name=self.label,
+            path=f"hf:{self.repo}", file_bytes=(file_bytes or self.approx_bytes) + self.mmproj_bytes, arch=self.id, name=self.label,
             block_count=self.block_count, head_count=self.head_count, head_count_kv=self.head_count_kv,
             embedding_length=self.head_count * self.head_dim, key_length=self.head_dim, value_length=self.head_dim,
             context_length=self.context_length, expert_count=self.expert_count,
@@ -51,6 +57,12 @@ PRESETS: list[Preset] = [
            int(2.4 * GiB), 36, 32, 8, 128, 262144, notes="default for 8 GB GPUs; 256k native context", tags=["8gb"]),
     Preset("qwen3-8b", "Qwen3 8B (Q4_K_M)", "unsloth/Qwen3-8B-GGUF", "Q4_K_M", int(4.9 * GiB),
            36, 32, 8, 128, 40960, notes="stronger reasoning; 32k native context, YaRN to 64k+", tags=["8gb", "12gb"]),
+    Preset("qwen3-vl-4b-instruct", "Qwen3-VL 4B Instruct (Q4_K_M) + vision", "unsloth/Qwen3-VL-4B-Instruct-GGUF", "Q4_K_M",
+           int(2.5 * GiB), 36, 32, 8, 128, 262144, notes="sees images (screen questions); 8 GB GPUs", tags=["8gb", "vision"],
+           mmproj="mmproj", mmproj_bytes=int(0.8 * GiB)),
+    Preset("qwen3-vl-8b-instruct", "Qwen3-VL 8B Instruct (Q4_K_M) + vision", "unsloth/Qwen3-VL-8B-Instruct-GGUF", "Q4_K_M",
+           int(5.0 * GiB), 36, 32, 8, 128, 262144, notes="sees images; 12 GB GPUs", tags=["12gb", "vision"],
+           mmproj="mmproj", mmproj_bytes=int(1.1 * GiB)),
     Preset("qwen3-14b", "Qwen3 14B (Q4_K_M)", "unsloth/Qwen3-14B-GGUF", "Q4_K_M", int(8.6 * GiB),
            40, 40, 8, 128, 40960, notes="12-16 GB GPUs", tags=["12gb", "16gb"]),
     Preset("gpt-oss-20b", "gpt-oss 20B (MXFP4)", "unsloth/gpt-oss-20b-GGUF", "F16", int(12.9 * GiB),

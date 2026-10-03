@@ -72,6 +72,12 @@ class FakeClient:
     def rename_session(self, sid, title):
         self.renamed = (sid, title)
 
+    def session_chat_events(self, sid, text, image_paths, should_stop=None):
+        self.image_turn = (sid, text, list(image_paths))
+        yield RunEvent("run.started", {"run_id": "run_img"})
+        yield RunEvent("message.delta", {"delta": "A terminal window."})
+        yield RunEvent("run.completed", {"output": "A terminal window."})
+
     def delete_session(self, sid):
         self.deleted = sid
 
@@ -414,3 +420,33 @@ def test_vox_flow_with_fake_recorder(app, monkeypatch):
     w.vox_start()
     assert w._recorder is None and "UNAVAILABLE" in w.status.text()
     assert _plain_text("++ 01001111 ++ **Done**: see [docs](http://x)\n- item `a`\n```py\nx=1\n```") == "Done: see docs item a code omitted"
+
+
+def test_screen_capture_and_image_turn(app, tmp_path, monkeypatch):
+    from mikronous_tray import chat_window, screen
+    from mikronous_tray.chat_window import ChatWindow
+    monkeypatch.setattr(screen, "data_dir", lambda: tmp_path)
+    monkeypatch.setattr(screen, "spectacle_available", lambda: False)
+    path = screen.capture(region=True)                       # offscreen: Qt grab (may be unavailable)
+    if path is None:
+        path = tmp_path / "screens" / "screen-fake.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        from PySide6.QtGui import QImage
+        QImage(8, 8, QImage.Format_RGB32).save(str(path))
+    for i in range(25):
+        (tmp_path / "screens" / f"screen-2000010{i:02d}-000000.png").write_bytes(b"x")
+    screen.prune(20)
+    assert len(list((tmp_path / "screens").glob("screen-*.png"))) == 20
+    fc = FakeClient()
+    w = ChatWindow(fc)
+    monkeypatch.setattr(screen, "capture", lambda region=True: path)
+    monkeypatch.setattr(chat_window, "_vision_ready", lambda: True)
+    w._capture_now(False)
+    assert w._pending_images == [str(path)] and w.input.toPlainText().startswith("What's on my screen?")
+    w.input.setPlainText("What's on my screen? Which app?")
+    w.send()
+    assert pump(app, lambda: w._worker is None, 15)
+    app.processEvents()
+    assert fc.image_turn == (w.session_id, "What's on my screen? Which app?", [str(path)])
+    assert w._pending_images == [] and any(m["role"] == "user" and m["text"].startswith("[1 screen capture attached]") for m in w.messages)
+    assert w.messages[-1]["text"] == "A terminal window."

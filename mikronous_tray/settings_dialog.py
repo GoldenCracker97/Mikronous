@@ -122,8 +122,14 @@ class SettingsDialog(QDialog):
         form.addRow("On quit", self.keep_model)
 
         form.addRow(_rule())
-        form.addRow("Cogitator", QLabel(model or "unknown"))
-        form.addRow("", _hint("Change the model from a terminal: mik model recommend --apply, or mik model use <gguf>."))
+        try:
+            from mikronous_cli.paths import LLAMA_ENV, read_env
+            vision = bool(read_env(LLAMA_ENV).get("LLAMA_MMPROJ", "").strip())
+        except Exception:  # noqa: BLE001
+            vision = False
+        form.addRow("Cogitator", QLabel((model or "unknown") + ("  · sees images" if vision else "  · text only")))
+        form.addRow("", _hint("Change the model from a terminal: mik model recommend --apply (add --vision for one that can "
+                              "answer about your screen), or mik model use <preset|gguf>."))
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)

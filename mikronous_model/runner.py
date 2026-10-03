@@ -37,6 +37,8 @@ def command_line(env: dict[str, str] | None = None) -> list[str]:
     extra = env.get("LLAMA_EXTRA_ARGS", "").strip()
     if extra:
         cmd += shlex.split(extra, posix=not IS_WINDOWS)
+    if env.get("LLAMA_MMPROJ", "").strip():
+        cmd += ["--mmproj", env["LLAMA_MMPROJ"].strip()]
     return cmd
 
 

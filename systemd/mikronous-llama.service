@@ -13,7 +13,7 @@ ExecStart=/bin/sh -c 'export LD_LIBRARY_PATH="$(dirname "${LLAMA_SERVER}")${LD_L
     -m "${LLAMA_MODEL}" --alias "${LLAMA_ALIAS}" \
     -c "${LLAMA_CTX}" -ngl "${LLAMA_NGL}" -t "${LLAMA_THREADS}" \
     -ctk "${LLAMA_KV_K}" -ctv "${LLAMA_KV_V}" -fa on --jinja \
-    --parallel "${LLAMA_PARALLEL}" ${LLAMA_EXTRA_ARGS}'
+    --parallel "${LLAMA_PARALLEL}" ${LLAMA_EXTRA_ARGS} ${LLAMA_MMPROJ:+--mmproj "${LLAMA_MMPROJ}"}'
 Restart=on-failure
 RestartSec=3
 # Let the GPU process see the user's session (CUDA/Vulkan device nodes).

@@ -64,6 +64,9 @@ CANT = {
     "transcribing": "++ TRANSCRIBING ++",
     "heard": "++ HEARD · EDIT OR TRANSMIT ++",
     "heard_nothing": "++ HEARD NOTHING ++",
+    "screen_ready": "++ {n} CAPTURE(S) ON THE SLATE · ASK ABOUT THEM ++",
+    "screen_cancelled": "++ CAPTURE ABANDONED ++",
+    "screen_no_vision": "++ CAPTURED · BUT THE COGITATOR IS BLIND: mik model recommend --vision --apply ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}

@@ -20,7 +20,8 @@ param(
   [string]$Voice = "full",         # plain | light | full (kept on re-runs)
   [string]$Hotkey = "Ctrl+Alt+Space",
   [string]$HotkeySelection = "Ctrl+Alt+Shift+Space",
-  [string]$HotkeyVox = "Ctrl+Alt+V"
+  [string]$HotkeyVox = "Ctrl+Alt+V",
+  [string]$HotkeyScreen = "Ctrl+Alt+S"
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -274,6 +275,7 @@ if (-not $NoTray -and $Mik) {
     $state | Add-Member -NotePropertyName hotkey -NotePropertyValue $Hotkey -Force
     $state | Add-Member -NotePropertyName hotkey_selection -NotePropertyValue $HotkeySelection -Force
     $state | Add-Member -NotePropertyName hotkey_vox -NotePropertyValue $HotkeyVox -Force
+    $state | Add-Member -NotePropertyName hotkey_screen -NotePropertyValue $HotkeyScreen -Force
     $state | ConvertTo-Json | Set-Content $stateFile
     $pyw = Join-Path (Split-Path $Mik) "pythonw.exe"
     if (-not (Test-Path $pyw)) { $pyw = (Get-Command pythonw -ErrorAction SilentlyContinue).Source }

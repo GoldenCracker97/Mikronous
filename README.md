@@ -185,6 +185,13 @@ checks GitHub and, when there are new commits, offers to pull, re-install and re
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
 
+**Ask about the screen.** Needs a model that sees: `mik model recommend --vision --apply` (Qwen3-VL
+4B for 8 GB cards, 8B for 12 GB; the projector file downloads with it, and the profile is told the
+model has vision). Then press `Meta+Shift+S` (`Ctrl+Alt+S` on Windows), the `SCREEN` button or
+`mik screen`: pick a region with Spectacle (the whole screen where Spectacle is missing), the window
+comes back with "What's on my screen?" ready to edit, and the capture is sent with your question to
+the local model. Captures stay in `~/.local/share/mikronous/screens/` (last 20).
+
 **Voice, fully local.** Install with `scripts/install.sh --voice` (Windows: `-VoiceInput`). Hold **VOX**
 in the window and speak; release and the words land in the input box, ready to edit or send. Or tap
 `Meta+Shift+V` (`Ctrl+Alt+V` on Windows) anywhere to start, and again to stop. Transcription is

@@ -138,6 +138,7 @@ class TrayApp(QObject):
         self.hotkey = None
         self.hotkey_selection = None
         self.hotkey_vox = None
+        self.hotkey_screen = None
         if sys.platform == "win32":
             self._register_hotkeys()
 
@@ -164,18 +165,19 @@ class TrayApp(QObject):
         self.hotkey_selection = WinHotkey(st.get("hotkey_selection", "Ctrl+Alt+Shift+Space"), self.window.selection_menu,
                                           self.app, HOTKEY_ID + 1)
         self.hotkey_vox = WinHotkey(st.get("hotkey_vox", "Ctrl+Alt+V"), self.window.vox_toggle, self.app, HOTKEY_ID + 2)
-        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox):
+        self.hotkey_screen = WinHotkey(st.get("hotkey_screen", "Ctrl+Alt+S"), self.window.capture_screen, self.app, HOTKEY_ID + 3)
+        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
             if not hk.ok:
                 print(f"mikronous-tray: could not register hotkey {hk.spec}: {hk.error}", file=sys.stderr)
 
     def _rebind_hotkey(self, _spec: str) -> None:
         if sys.platform != "win32":
             return
-        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox):
+        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
             if hk:
                 hk.unregister()
         self._register_hotkeys()
-        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox):
+        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
             if hk and not hk.ok:
                 self.tray.showMessage("Mikronous", f"Could not register hotkey {hk.spec}: {hk.error}", QSystemTrayIcon.Warning, 6000)
 
@@ -305,6 +307,8 @@ class TrayApp(QObject):
             self.window.selection_menu()
         elif cmd == "vox":
             self.window.vox_toggle()
+        elif cmd == "screen":
+            self.window.capture_screen()
         elif cmd == "update":
             self.window.show_window()
             self.check_updates(interactive=True)
@@ -347,7 +351,7 @@ class TrayApp(QObject):
         self.tray.showMessage("Mikronous", text, QSystemTrayIcon.Information, 4000)
 
     def quit(self) -> None:
-        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox):
+        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
             if hk:
                 hk.unregister()
         if self.krunner:

@@ -121,6 +121,38 @@ class HermesClient:
         name = {"completed": "run.completed", "cancelled": "run.cancelled", "interrupted": "run.interrupted"}.get(st, "run.failed")
         yield RunEvent(name, status)
 
+    # ----------------------------------------------------------------- session chat with images
+    def session_chat_events(self, session_id: str, text: str, image_paths: list[str], *,
+                            should_stop: Callable[[], bool] | None = None) -> Iterator[RunEvent]:
+        """One turn through ``POST /api/sessions/{id}/chat/stream`` with inline images (data URLs), yielding
+        the same event names as :meth:`events` so the window code does not care which path ran."""
+        parts: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+        for p in image_paths:
+            parts.append({"type": "input_image", "image_url": image_data_url(p)})
+        body = {"message": parts}
+        try:
+            with self._client.stream("POST", f"{self.api_root}/api/sessions/{session_id}/chat/stream", json=body,
+                                     headers={"Accept": "text/event-stream"}, timeout=httpx.Timeout(RUN_TIMEOUT, connect=CONNECT_TIMEOUT)) as r:
+                if r.status_code >= 400:
+                    detail = ""
+                    try:
+                        detail = (r.read().decode("utf-8", "replace"))[:300]
+                    except Exception:  # noqa: BLE001
+                        pass
+                    raise GatewayError(f"HTTP {r.status_code} on session chat stream: {detail}")
+                for ev in _parse_sse(r.iter_lines(), should_stop):
+                    if ev is None:
+                        break
+                    norm = normalize_session_event(ev)
+                    if norm is None:
+                        continue
+                    yield norm
+                    if norm.terminal:
+                        return
+        except httpx.HTTPError as exc:
+            raise GatewayError(f"session chat stream lost: {exc.__class__.__name__}") from exc
+        yield RunEvent("run.failed", {"error": "the stream ended without a result"})
+
     # ----------------------------------------------------------------- sessions
     def session_messages(self, session_id: str, limit: int = 200) -> list[dict]:
         """Chat history (user/assistant text only) for repopulating a window after a restart."""
@@ -186,10 +218,40 @@ class HermesClient:
         self._client.close()
 
 
+def image_data_url(path: str) -> str:
+    import base64
+    import mimetypes
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    with open(path, "rb") as f:
+        return f"data:{mime};base64,{base64.b64encode(f.read()).decode('ascii')}"
+
+
+def normalize_session_event(ev: RunEvent) -> RunEvent | None:
+    """Session-stream event names → the /v1/runs vocabulary the window understands. None = ignore."""
+    d, name = ev.data, ev.name
+    if name == "assistant.delta":
+        return RunEvent("message.delta", {"delta": d.get("delta", "")})
+    if name == "assistant.commentary":
+        return RunEvent("message.interim", {"text": d.get("text", ""), "already_streamed": d.get("already_streamed")})
+    if name in ("tool.started", "tool.completed", "tool.failed"):
+        return RunEvent("tool.started" if name == "tool.started" else "tool.completed",
+                        {"tool": d.get("tool_name") or d.get("tool") or "", "preview": d.get("preview") or "",
+                         "error": name == "tool.failed" or bool(d.get("error"))})
+    if name in ("approval.request", "run.started"):
+        return RunEvent(name, d)
+    if name in ("run.completed", "run.failed", "run.cancelled", "run.interrupted"):
+        out = d.get("final_response") or d.get("output") or ""
+        return RunEvent(name, {**d, "output": out})
+    if name == "error":
+        return RunEvent("run.failed", {"error": d.get("message") or "the run failed"})
+    return None            # message.started, tool.progress, assistant.completed, done
+
+
 def _parse_sse(lines: Iterator[str], should_stop: Callable[[], bool] | None) -> Iterator[RunEvent | None]:
     """Minimal SSE parser: ``data:`` lines (joined per blank-line frame) become RunEvent;
     the ``: stream closed`` comment yields None; other comments are ignored."""
     data_lines: list[str] = []
+    event_name = ""
     for raw in lines:
         if should_stop and should_stop():
             return
@@ -197,13 +259,13 @@ def _parse_sse(lines: Iterator[str], should_stop: Callable[[], bool] | None) -> 
         if line == "":
             if data_lines:
                 payload = "\n".join(data_lines)
-                data_lines = []
+                data_lines, name, event_name = [], event_name, ""
                 try:
                     obj = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
                 if isinstance(obj, dict):
-                    yield RunEvent(str(obj.get("event", "")), obj)
+                    yield RunEvent(str(obj.get("event") or name or ""), obj)
             continue
         if line.startswith(":"):
             if "stream closed" in line:
@@ -212,4 +274,5 @@ def _parse_sse(lines: Iterator[str], should_stop: Callable[[], bool] | None) -> 
             continue
         if line.startswith("data:"):
             data_lines.append(line[5:].lstrip())
-        # id:/event: lines are not needed: the payload carries event + seq
+        elif line.startswith("event:"):
+            event_name = line[6:].strip()         # the session stream names events here; /v1/runs puts it in the payload

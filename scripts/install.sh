@@ -214,6 +214,10 @@ if [[ "$WITH_MODEL" == 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Keep the profile's vision flag in step with the loaded model (install.sh just rewrote config.yaml).
+MIK_BIN="$(command -v mik 2>/dev/null || echo "$HOME/.local/bin/mik")"
+[[ -x "$MIK_BIN" ]] && "$MIK_BIN" model sync-config --no-restart >/dev/null 2>&1 || true
+
 step "Hermes gateway (API server + cron)"
 # Hermes >= 0.21 runs ONE host gateway (default profile) that serves every profile; the mikronous
 # API server is then mirrored at http://127.0.0.1:<default port>/p/mikronous/v1 and authenticated
@@ -308,6 +312,7 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       HOTKEY="${MIKRONOUS_HOTKEY:-Meta+Space}"
       HOTKEY_SEL="${MIKRONOUS_HOTKEY_SELECTION:-Meta+Shift+Space}"
       HOTKEY_VOX="${MIKRONOUS_HOTKEY_VOX:-Meta+Shift+V}"
+      HOTKEY_SCREEN="${MIKRONOUS_HOTKEY_SCREEN:-Meta+Shift+S}"
       if command -v kwriteconfig6 >/dev/null 2>&1; then KW=kwriteconfig6; KF=6
       elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; KF=5; else KW=""; fi
       write_hotkey() {
@@ -315,6 +320,7 @@ if [[ "$WITH_TRAY" == 1 ]]; then
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key selection "$HOTKEY_SEL"
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key vox "$HOTKEY_VOX"
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key screen "$HOTKEY_SCREEN"
         else
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch --delete 2>/dev/null || true
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key selection --delete 2>/dev/null || true
@@ -323,12 +329,14 @@ if [[ "$WITH_TRAY" == 1 ]]; then
           "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key selection "$HOTKEY_SEL,none,Mikronous: act on selected text"
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key vox --delete 2>/dev/null || true
           "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key vox "$HOTKEY_VOX,none,Mikronous: voice input"
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key screen --delete 2>/dev/null || true
+          "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key screen "$HOTKEY_SCREEN,none,Mikronous: ask about the screen"
         fi
       }
       if [[ -n "$KW" ]]; then
         SECTION="$(sed -n '/\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null)"
         if ! grep -qE "^_launch=$HOTKEY(,|$)" <<<"$SECTION" || ! grep -qE "^selection=$HOTKEY_SEL(,|$)" <<<"$SECTION" \
-           || ! grep -qE "^vox=$HOTKEY_VOX(,|$)" <<<"$SECTION"; then
+           || ! grep -qE "^vox=$HOTKEY_VOX(,|$)" <<<"$SECTION" || ! grep -qE "^screen=$HOTKEY_SCREEN(,|$)" <<<"$SECTION"; then
           # The daemon writes its in-memory table to the file when it stops, so stop it BEFORE writing.
           if systemctl --user is-active --quiet plasma-kglobalaccel.service 2>/dev/null; then
             systemctl --user stop plasma-kglobalaccel.service; sleep 1
@@ -343,7 +351,7 @@ if [[ "$WITH_TRAY" == 1 ]]; then
               || (command -v kglobalaccel5 >/dev/null 2>&1 && setsid kglobalaccel5 >/dev/null 2>&1 &) || true
           fi
         fi
-        echo "shortcut: $HOTKEY opens the chat window; $HOTKEY_SEL acts on selected text; $HOTKEY_VOX is voice input (System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY= / _SELECTION= / _VOX=)"
+        echo "shortcut: $HOTKEY opens the chat window; $HOTKEY_SEL acts on selected text; $HOTKEY_VOX voice input; $HOTKEY_SCREEN ask about the screen (System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY= / _SELECTION= / _VOX= / _SCREEN=)"
       else
         echo "note: kwriteconfig not found; assign the shortcut in System Settings > Shortcuts > Add > Mikronous"
       fi

@@ -10,6 +10,8 @@
 model:
   provider: llamacpp
   default: mikronous-local
+  # true when the loaded GGUF has a vision projector (mik model use <vision preset> keeps this in sync).
+  supports_vision: false
 
 providers:
   llamacpp:
@@ -86,6 +88,8 @@ telemetry:
     send: false
 
 agent:
+  # auto: send pixels when supports_vision is true, otherwise describe images in text (mik model sets native/auto).
+  image_input_mode: auto
   # cronjob is hidden on purpose: set_reminder (our plugin) is the only scheduler the model
   # sees. The cron engine itself keeps running; `hermes cron` and /cron still work for you.
   disabled_toolsets: [connections, image_gen, video_gen, video, tts, x_search, vision, cronjob]

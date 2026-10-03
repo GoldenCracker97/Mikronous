@@ -110,7 +110,7 @@ def cmd_list(args) -> int:
         kv = f"{fit.kv_k}/{fit.kv_v}"
         dev = "GPU" if _has_gpu(hw) else "RAM"
         place = dev if fit.full_offload else (f"GPU {fit.ngl}L+RAM" if fit.ngl and dev == "GPU" else "too big")
-        print(f"[{verdict:>5}] {p.id:<{width}}  {fmt_bytes(p.approx_bytes):>9}  ctx {fit.ctx:>6}  kv {kv:<11} {place:<14} {p.notes}")
+        print(f"[{verdict:>5}] {p.id:<{width}}  {fmt_bytes(p.approx_bytes + p.mmproj_bytes):>9}  ctx {fit.ctx:>6}  kv {kv:<11} {place:<14} {p.notes}")
     dev = "the GPU" if _has_gpu(hw) else "RAM"
     print(f"\ngreen = whole model + 64k context on {dev} · amber = fits with a smaller context · red = does not fit / spills")
     print("Apply one with:  mik model use <id> --apply      Any other GGUF:  mik model use hf:owner/repo[:file] --apply")
@@ -123,7 +123,8 @@ def cmd_recommend(args) -> int:
     budget, label = _budget(hw)
     print(f"\nBudget on {label}: {fmt_bytes(budget)}\n")
     best: tuple[Preset, Fit] | None = None
-    for p in [p for p in all_presets() if p.source == "mikronous"]:
+    want_vision = bool(getattr(args, "vision", False))
+    for p in [p for p in all_presets() if p.source == "mikronous" and p.vision == want_vision]:
         fit = best_fit(p.meta(), budget)
         if fit.full_offload and (best is None or _score(fit) > _score(best[1])):
             best = (p, fit)
@@ -133,7 +134,7 @@ def cmd_recommend(args) -> int:
     preset, fit = best
     _print_fit(f"Recommended: {preset.label}  [{preset.id}]  {preset.repo}", fit, preset.meta(), _has_gpu(hw))
     if not args.apply:
-        print(f"\nApply it:  mik model use {preset.id} --apply")
+        print(f"\nApply it:  mik model use {preset.id} --apply" + ("" if want_vision else "\n(a model that sees your screen: mik model recommend --vision)"))
         return 0
     return _apply_preset(preset, hw, fit, args)
 
@@ -142,22 +143,71 @@ def _apply_preset(preset: Preset, hw: HardwareProfile, fit: Fit, args) -> int:
     repo, filename, size = apply_mod.resolve_hf(f"hf:{preset.repo}", preset.file_hint)
     meta = preset.meta(size)
     fit = best_fit(meta, fit.budget_bytes)
-    return _finish_apply(meta, fit, repo, filename, hw, args)
+    return _finish_apply(meta, fit, repo, filename, hw, args, mmproj=_preset_mmproj(preset))
 
 
-def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | None, hw: HardwareProfile, args) -> int:
+def _preset_mmproj(preset: Preset | None) -> tuple[str, str] | None:
+    """(repo, filename) of the vision projector for a vision preset, else None."""
+    if preset is None or not preset.vision:
+        return None
+    name, _size = apply_mod.resolve_mmproj(preset.repo, preset.mmproj)
+    return preset.repo, name
+
+
+def _sync_vision_config(vision: bool, restart: bool = True) -> None:
+    """Tell Hermes whether the local model sees images (model.supports_vision + agent.image_input_mode)."""
+    try:
+        from mikronous_cli import privacy
+        cfg = privacy.load_config()
+        if not cfg:
+            return
+        model = cfg.setdefault("model", {}) or {}
+        cfg["model"] = model
+        agent = cfg.setdefault("agent", {}) or {}
+        cfg["agent"] = agent
+        if bool(model.get("supports_vision")) == vision and agent.get("image_input_mode") == ("native" if vision else "auto"):
+            return
+        model["supports_vision"] = vision
+        agent["image_input_mode"] = "native" if vision else "auto"
+        privacy.save_config(cfg)
+        print(f"profile config: supports_vision={'true' if vision else 'false'}")
+        if restart:
+            from mikronous_cli.platform import hermes_bin
+            from mikronous_cli.paths import PROFILE
+            subprocess.run([hermes_bin(), "-p", PROFILE, "gateway", "restart"], capture_output=True, text=True, timeout=120)
+    except Exception as exc:  # noqa: BLE001 - the model still works; vision routing is a nicety
+        print(f"(could not update the profile's vision setting: {exc})", file=sys.stderr)
+
+
+def cmd_sync_config(args) -> int:
+    env = LlamaEnv.load()
+    _sync_vision_config(bool(env["LLAMA_MMPROJ"].strip()), restart=not args.no_restart)
+    print(f"vision: {'on (' + env['LLAMA_MMPROJ'] + ')' if env['LLAMA_MMPROJ'].strip() else 'off'}")
+    return 0
+
+
+def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | None, hw: HardwareProfile, args,
+                  mmproj: tuple[str, str] | None = None) -> int:
+    mmproj_path: Path | None = None
     if repo and filename:
         path = apply_mod.download(repo, filename)
+        if mmproj:
+            mmproj_path = apply_mod.download(mmproj[0], mmproj[1])
         real = read_meta(str(path))
         if real.block_count:
+            if mmproj_path:
+                real.file_bytes += mmproj_path.stat().st_size
             meta = real
             fit = best_fit(meta, fit.budget_bytes, target_ctx=getattr(args, "ctx", None) or HERMES_MIN_CTX)
     else:
         path = Path(meta.path)
+        if getattr(args, "mmproj", None):
+            mmproj_path = Path(args.mmproj).expanduser()
     env = LlamaEnv.load()
     if not _has_gpu(hw):
         fit.ngl = 0
-    env.apply_fit(fit, meta, path, threads=_threads(hw))
+    env.apply_fit(fit, meta, path, threads=_threads(hw), mmproj_path=mmproj_path)
+    _sync_vision_config(mmproj_path is not None, restart=False)      # the server restart below reloads nothing in Hermes; gateway picks it up on its next restart
     if getattr(args, "kv", None):
         k, _, v = args.kv.partition("/")
         env["LLAMA_KV_K"], env["LLAMA_KV_V"] = k, (v or k)
@@ -210,7 +260,7 @@ def cmd_use(args) -> int:
     if not args.apply:
         print("\nAdd --apply to download (if needed), write llama.env and restart the server.")
         return 0
-    return _finish_apply(meta, fit, repo, filename, hw, args)
+    return _finish_apply(meta, fit, repo, filename, hw, args, mmproj=_preset_mmproj(preset))
 
 
 def cmd_tune(args) -> int:
@@ -281,7 +331,8 @@ def build_parser(prog: str = "mik model") -> argparse.ArgumentParser:
 
     d = sub.add_parser("detect", help="show GPU / RAM / CPU and the memory budget"); d.add_argument("--json", action="store_true"); d.set_defaults(func=cmd_detect)
     sub.add_parser("list", help="presets with a fit verdict for this machine").set_defaults(func=cmd_list)
-    r = sub.add_parser("recommend", help="pick the best preset for this hardware"); r.add_argument("--apply", action="store_true", help="download + write llama.env + restart"); r.add_argument("--no-restart", action="store_true"); r.set_defaults(func=cmd_recommend)
+    r = sub.add_parser("recommend", help="pick the best preset for this hardware"); r.add_argument("--apply", action="store_true", help="download + write llama.env + restart"); r.add_argument("--no-restart", action="store_true")
+    r.add_argument("--vision", action="store_true", help="pick a model that sees images (screen questions)"); r.set_defaults(func=cmd_recommend)
 
     u = sub.add_parser("use", help="fit a preset id, hf:owner/repo[:file], or a local .gguf")
     u.add_argument("model"); u.add_argument("--apply", action="store_true"); u.add_argument("--no-restart", action="store_true")
@@ -289,7 +340,10 @@ def build_parser(prog: str = "mik model") -> argparse.ArgumentParser:
     u.add_argument("--kv", help="KV cache types K[/V], e.g. q8_0 or q8_0/q4_0 or f16")
     u.add_argument("--ngl", type=int, help="force GPU layer count (999 = all)")
     u.add_argument("--quant", help="filename hint when hf:repo has no file (default Q4_K_M)")
+    u.add_argument("--mmproj", help="vision projector .gguf for a local multimodal model (presets resolve theirs)")
     u.set_defaults(func=cmd_use)
+    sc = sub.add_parser("sync-config", help="write the model's vision capability into the Hermes profile config")
+    sc.add_argument("--no-restart", action="store_true"); sc.set_defaults(func=cmd_sync_config)
 
     t = sub.add_parser("tune", help="change settings of the current model and restart")
     t.add_argument("--ctx", type=int); t.add_argument("--kv"); t.add_argument("--ngl", type=int); t.add_argument("--threads", type=int)

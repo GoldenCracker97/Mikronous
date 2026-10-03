@@ -30,9 +30,10 @@ class ChatWorker(QObject):
     approval = Signal(dict)
     finished = Signal(str, str)               # status, output/error text
 
-    def __init__(self, client: HermesClient, text: str, session_id: str):
+    def __init__(self, client: HermesClient, text: str, session_id: str, image_paths: list[str] | None = None):
         super().__init__()
         self.client, self.text, self.session_id = client, text, session_id
+        self.image_paths = list(image_paths or [])
         self.run_id: str | None = None
         self._stop = threading.Event()
 
@@ -47,6 +48,18 @@ class ChatWorker(QObject):
     @Slot()
     def run(self) -> None:
         try:
+            if self.image_paths:                 # images ride the session chat stream (the runs API is text-only)
+                for ev in self.client.session_chat_events(self.session_id, self.text, self.image_paths, should_stop=self._stop.is_set):
+                    if ev.name == "run.started":
+                        self.run_id = str(ev.data.get("run_id") or "") or None
+                        if self.run_id:
+                            self.started_run.emit(self.run_id)
+                        continue
+                    self._dispatch(ev)
+                    if ev.terminal:
+                        return
+                self.finished.emit("cancelled", "Stopped.")
+                return
             self.run_id = self.client.start_run(self.text, self.session_id)
             self.started_run.emit(self.run_id)
             for ev in self.client.events(self.run_id, should_stop=self._stop.is_set):
@@ -159,6 +172,7 @@ class ChatWindow(QWidget):
         self._update_state = "idle"
         self._copy_next_answer = False
         self._quiet_question: str | None = None
+        self._pending_images: list[str] = []
         self._recorder = None
         self._stt_thread: QThread | None = None
         self._speaker = None
@@ -177,6 +191,7 @@ class ChatWindow(QWidget):
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.new_chat)
         QShortcut(QKeySequence("Ctrl+H"), self, activated=self.toggle_sidebar)
         QShortcut(QKeySequence("Ctrl+,"), self, activated=self.open_settings)
+        QShortcut(QKeySequence("Ctrl+Shift+S"), self, activated=self.capture_screen)
         if self.session_id:
             self._load_history()
         else:
@@ -199,7 +214,7 @@ class ChatWindow(QWidget):
         hl.addSpacing(4)
         hl.addWidget(QLabel("MIKRONOUS", objectName="title"))
         hl.addStretch(1)
-        self.model_label = QLabel(_model_name(), objectName="model")
+        self.model_label = QLabel(_model_name() + (" · 👁" if _vision_ready() else ""), objectName="model")
         hl.addWidget(self.model_label)
         hl.addSpacing(10)
         self.btn_chats = QPushButton("CHATS", objectName="hbtn")
@@ -211,6 +226,10 @@ class ChatWindow(QWidget):
         self.btn_settings.setToolTip("Settings (Ctrl+,)")
         self.btn_settings.clicked.connect(self.open_settings)
         hl.addWidget(self.btn_settings)
+        self.btn_screen = QPushButton("SCREEN", objectName="hbtn")
+        self.btn_screen.setToolTip("Capture a region of the screen and ask about it (Ctrl+Shift+S)")
+        self.btn_screen.clicked.connect(self.capture_screen)
+        hl.addWidget(self.btn_screen)
         self.btn_update = QPushButton("UPDATE", objectName="hbtn")
         self.btn_update.setToolTip("Check GitHub for a newer Mikronous")
         self.btn_update.clicked.connect(self.update_requested.emit)
@@ -601,15 +620,42 @@ class ChatWindow(QWidget):
         text = self.input.toPlainText().strip()
         if not text or self._worker is not None:
             return
+        images, self._pending_images = self._pending_images, []
         self.input.clear()
-        self._add("user", text)
+        self._add("user", (f"[{len(images)} screen capture{'s' if len(images) > 1 else ''} attached]\n" if images else "") + text)
         self._streaming = ""
         self._schedule_render()
-        self._start_worker(text)
+        self._start_worker(text, images)
 
-    def _start_worker(self, text: str) -> None:
+    # ------------------------------------------------------------------ screen
+    def capture_screen(self) -> None:
+        """Hide the slate, let the user pick a region (Spectacle) or grab the screen, then ask."""
+        from . import screen
+        was_visible = self.isVisible()
+        if was_visible:
+            self.hide()
+        QTimer.singleShot(350 if was_visible else 0, lambda: self._capture_now(was_visible))
+
+    def _capture_now(self, reshow: bool) -> None:
+        from . import screen
+        path = screen.capture(region=True)
+        self.show_window()
+        if path is None:
+            self._set_status(CANT["screen_cancelled"])
+            return
+        self._pending_images.append(str(path))
+        if not _vision_ready():
+            self._set_status(CANT["screen_no_vision"])
+        else:
+            self._set_status(CANT["screen_ready"].format(n=len(self._pending_images)))
+        if not self.input.toPlainText().strip():
+            self.input.setPlainText("What's on my screen? ")
+            self.input.moveCursor(QTextCursor.End)
+        self.input.setFocus()
+
+    def _start_worker(self, text: str, images: list[str] | None = None) -> None:
         self._thread = QThread(self)
-        self._worker = ChatWorker(self.client, text, self.session_id)
+        self._worker = ChatWorker(self.client, text, self.session_id, images)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.delta.connect(self._on_delta)
@@ -822,6 +868,15 @@ class _GatewayRestart(QObject):
 
 def _model_name() -> str:
     return prefs.model_name()
+
+
+def _vision_ready() -> bool:
+    """True when llama.env names a vision projector (set by `mik model use <vision preset>`)."""
+    try:
+        from mikronous_cli.paths import LLAMA_ENV, read_env
+        return bool(read_env(LLAMA_ENV).get("LLAMA_MMPROJ", "").strip())
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _cell(inner: str, *, bg: str, border: str, align: str = "left", indent_left: int = 0, indent_right: int = 0,

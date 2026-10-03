@@ -9,7 +9,7 @@ Terminal=false
 Categories=Utility;
 StartupNotify=false
 X-KDE-Shortcuts=Meta+Space
-Actions=selection;vox;
+Actions=selection;vox;screen;
 
 [Desktop Action selection]
 Name=Mikronous: act on selected text
@@ -22,3 +22,9 @@ Name=Mikronous: voice input
 Exec=mik vox
 Icon=mikronous
 X-KDE-Shortcuts=Meta+Shift+V
+
+[Desktop Action screen]
+Name=Mikronous: ask about the screen
+Exec=mik screen
+Icon=mikronous
+X-KDE-Shortcuts=Meta+Shift+S

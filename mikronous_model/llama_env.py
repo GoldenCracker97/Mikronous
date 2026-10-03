@@ -15,7 +15,7 @@ from .gguf import GGUFMeta
 DEFAULTS = {
     "LLAMA_SERVER": "", "LLAMA_PORT": "8081", "LLAMA_MODEL": "", "LLAMA_ALIAS": "mikronous-local",
     "LLAMA_CTX": "65536", "LLAMA_NGL": "999", "LLAMA_THREADS": "8", "LLAMA_KV_K": "q8_0", "LLAMA_KV_V": "q4_0",
-    "LLAMA_PARALLEL": "1", "LLAMA_EXTRA_ARGS": "",
+    "LLAMA_PARALLEL": "1", "LLAMA_EXTRA_ARGS": "", "LLAMA_MMPROJ": "",
 }
 
 
@@ -64,8 +64,10 @@ class LlamaEnv:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def apply_fit(self, fit: Fit, meta: GGUFMeta, model_path: Path, threads: int | None = None) -> None:
+    def apply_fit(self, fit: Fit, meta: GGUFMeta, model_path: Path, threads: int | None = None,
+                  mmproj_path: Path | None = None) -> None:
         self["LLAMA_MODEL"] = str(model_path)
+        self["LLAMA_MMPROJ"] = str(mmproj_path) if mmproj_path else ""     # a text-only model clears it
         self["LLAMA_CTX"] = fit.ctx
         self["LLAMA_NGL"] = fit.ngl
         self["LLAMA_KV_K"] = fit.kv_k
@@ -94,4 +96,5 @@ class LlamaEnv:
                 f"server  {self['LLAMA_SERVER']}\n"
                 f"ctx     {self['LLAMA_CTX']}   gpu layers {self['LLAMA_NGL']}   threads {self['LLAMA_THREADS']}\n"
                 f"kv      K={self['LLAMA_KV_K']} V={self['LLAMA_KV_V']}   parallel {self['LLAMA_PARALLEL']}\n"
-                f"extra   {self['LLAMA_EXTRA_ARGS'] or '-'}")
+                f"extra   {self['LLAMA_EXTRA_ARGS'] or '-'}\n"
+                f"vision  {self['LLAMA_MMPROJ'] or 'no (text-only model)'}")

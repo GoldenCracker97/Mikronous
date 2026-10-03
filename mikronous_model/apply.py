@@ -43,6 +43,26 @@ def resolve_hf(spec: str, hint: str | None = None) -> tuple[str, str, int]:
     return repo, cands[0][0], cands[0][1]
 
 
+def pick_mmproj(files: list[tuple[str, int]], hint: str = "mmproj") -> tuple[str, int] | None:
+    """The vision projector in a repo's file list: prefers F16, then BF16, then the first match."""
+    cands = [(n, s) for n, s in files if hint.lower() in n.lower()]
+    if not cands:
+        return None
+    import re
+    for pref in (r"(?<!b)f16", r"bf16"):
+        for n, s in cands:
+            if re.search(pref, n.lower()):
+                return n, s
+    return cands[0]
+
+
+def resolve_mmproj(repo: str, hint: str = "mmproj") -> tuple[str, int]:
+    picked = pick_mmproj(hf_list_gguf(repo), hint)
+    if picked is None:
+        raise ValueError(f"no {hint} file in {repo}")
+    return picked
+
+
 def download(repo: str, filename: str, dest_dir: Path = MODELS_DIR) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / Path(filename).name
