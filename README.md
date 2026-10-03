@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 2** — profile, local model server, gateway, hardware-fit tool, desktop tools, reminders as notifications. No tray UI yet.
+Status: **Phase 2 complete** — profile, local model server, gateway, hardware-fit tool, desktop tools, reminders delivered as KDE notifications (verified end to end). Next: Phase 3 tray app.
 
 ## What you get
 

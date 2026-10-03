@@ -24,6 +24,27 @@ def socket_path() -> Path:
     return Path(runtime) / "mikronous.sock"
 
 
+# Hermes cron wraps no-agent output as "Cronjob Response: <name>\n(job_id: …)\n-------------\n\n<body>\n\n
+# To stop or manage this job, send me a new message (…)". Mirrors cron/scheduler_delivery.py; the
+# footer makes no sense on a desktop popup and the header is a better title than a first line.
+CRON_HEADER = "Cronjob Response: "
+CRON_DIVIDER = "\n-------------\n"
+CRON_FOOTER = "\n\nTo stop or manage this job, send me a new message"
+
+
+def _strip_cron_wrapper(text: str) -> tuple[str | None, str]:
+    """Return (title, body) for a wrapped cron delivery, (None, text) for anything else."""
+    if not text.startswith(CRON_HEADER) or CRON_DIVIDER not in text:
+        return None, text
+    head, _, body = text.partition(CRON_DIVIDER)
+    name = head[len(CRON_HEADER):].splitlines()[0].strip()
+    if CRON_FOOTER in body:
+        body = body[: body.index(CRON_FOOTER)]
+    body = body.strip()
+    title = "Reminder" if name.lower().startswith("reminder") else (name or "Mikronous")
+    return title, body or name
+
+
 def _split_title(text: str) -> tuple[str, str]:
     """First short line becomes the title when the message has several lines."""
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
@@ -50,7 +71,10 @@ def deliver(chat_id: str, text: str, *, source: str = "gateway") -> dict:
     text = (text or "").strip()
     if not text:
         return {"error": "empty message"}
+    cron_title, text = _strip_cron_wrapper(text)
     payload = {"ts": time.time(), "chat_id": chat_id or "desktop", "text": text, "source": source}
+    if cron_title:
+        payload["title"] = cron_title
     try:
         INBOX.parent.mkdir(parents=True, exist_ok=True)
         with INBOX.open("a", encoding="utf-8") as fh:
@@ -60,7 +84,7 @@ def deliver(chat_id: str, text: str, *, source: str = "gateway") -> dict:
         payload["inbox"] = False
         payload["inbox_error"] = str(exc)
     payload["tray"] = _push_to_tray(payload)
-    title, body = _split_title(text)
+    title, body = (cron_title, text) if cron_title else _split_title(text)
     if len(body) > MAX_NOTIFY_CHARS:
         body = body[:MAX_NOTIFY_CHARS - 1] + "…"
     note = desktop.notify(title, body, urgency="normal")
