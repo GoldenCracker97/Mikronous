@@ -182,11 +182,23 @@ is_multiplexed() {
   grep -qiE '^\s*multiplex_profiles:\s*true' "$DEFAULT_CFG" 2>/dev/null && return 0
   [[ -f "$UNIT_DIR/hermes-gateway.service" ]]
 }
+ensure_own_port() {
+  # A standalone profile's listener must not collide with the default profile's API server (8642).
+  HOST_PORT="$(grep ^API_SERVER_PORT= "$DEFAULT_ENV" 2>/dev/null | cut -d= -f2)"; HOST_PORT="${HOST_PORT:-8642}"
+  API_PORT="$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2 | cut -d' ' -f1)"
+  if [[ -z "$API_PORT" || "$API_PORT" == "$HOST_PORT" ]]; then
+    API_PORT=$(( HOST_PORT + 1 ))
+    if grep -q '^API_SERVER_PORT=' "$PROFILE_HOME/.env"; then sed -i "s|^API_SERVER_PORT=.*|API_SERVER_PORT=$API_PORT|" "$PROFILE_HOME/.env"
+    else echo "API_SERVER_PORT=$API_PORT" >> "$PROFILE_HOME/.env"; fi
+    echo "set API_SERVER_PORT=$API_PORT in $PROFILE_HOME/.env (host gateway owns $HOST_PORT)"
+  fi
+}
 GATEWAY_MODE=""
 if is_multiplexed; then
   GATEWAY_MODE=multiplex
 else
   # Profile runs its own gateway (gateway.standalone: true in its config, or an older Hermes).
+  ensure_own_port   # before the unit starts, so it never binds the host's port
   [[ -f "$UNIT_DIR/hermes-gateway-$PROFILE.service" ]] && already=1 || already=0
   printf 'y\ny\ny\n' | hp gateway install; rc=$?
   if [[ $rc -eq 0 ]]; then GATEWAY_MODE=standalone
@@ -210,15 +222,6 @@ case "$GATEWAY_MODE" in
     API_URL="http://127.0.0.1:${API_PORT:-8642}/p/$PROFILE/v1"
     ;;
   standalone)
-    # Our own listener must not collide with the default profile's API server (8642).
-    HOST_PORT="$(grep ^API_SERVER_PORT= "$DEFAULT_ENV" 2>/dev/null | cut -d= -f2)"; HOST_PORT="${HOST_PORT:-8642}"
-    API_PORT="$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2 | cut -d' ' -f1)"
-    if [[ -z "$API_PORT" || "$API_PORT" == "$HOST_PORT" ]]; then
-      API_PORT=$(( HOST_PORT + 1 ))
-      if grep -q '^API_SERVER_PORT=' "$PROFILE_HOME/.env"; then sed -i "s|^API_SERVER_PORT=.*|API_SERVER_PORT=$API_PORT|" "$PROFILE_HOME/.env"
-      else echo "API_SERVER_PORT=$API_PORT" >> "$PROFILE_HOME/.env"; fi
-      echo "set API_SERVER_PORT=$API_PORT in $PROFILE_HOME/.env (host gateway owns $HOST_PORT)"
-    fi
     # If a host gateway is running it must stop serving this profile; a restart makes it re-read the flag.
     if [[ -f "$UNIT_DIR/hermes-gateway.service" ]] && systemctl --user is-active --quiet hermes-gateway.service; then
       printf 'y\ny\n' | hermes gateway restart >/dev/null 2>&1 || true
