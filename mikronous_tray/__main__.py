@@ -19,6 +19,15 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in ("-h", "--help"):
         print(__doc__.strip())
         return 0
+    if cmd == "--render-icon":          # install.sh: write a 48px PNG of the colour icon (no display needed)
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QApplication
+        from . import theme
+        QApplication(sys.argv[:1])
+        out = argv[1] if len(argv) > 1 else "mikronous.png"
+        ok = theme.qicon("color").pixmap(QSize(48, 48)).save(out, "PNG")
+        return 0 if ok else 1
     try:
         from .app import send_control
     except ImportError as exc:

@@ -265,6 +265,10 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous-tray-autostart.desktop" > "$HOME/.config/autostart/mikronous-tray.desktop"
       cp "$REPO_DIR/packaging/mikronous.svg" "$ICONS/mikronous.svg"
       cp "$REPO_DIR/packaging/mikronous-symbolic-light.svg" "$ICONS/mikronous-symbolic.svg"
+      # 48px PNG for lookups that skip scalable/, and a touch so KDE's icon cache rescans the theme.
+      PNGS="$HOME/.local/share/icons/hicolor/48x48/apps"; mkdir -p "$PNGS"
+      "$MIK" tray --render-icon "$PNGS/mikronous.png" >/dev/null 2>&1 || true
+      touch "$HOME/.local/share/icons/hicolor" "$HOME/.local/share/icons" 2>/dev/null || true
       command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 >/dev/null 2>&1 || true
       command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
       echo "installed: $APPS/mikronous.desktop, autostart entry, icon"

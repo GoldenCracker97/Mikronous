@@ -117,7 +117,7 @@ class ChatWindow(QWidget):
 
         self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
-        self.setWindowIcon(QIcon(str(theme.icon_path("color"))))
+        self.setWindowIcon(theme.qicon("color"))
         self.setWindowFlag(Qt.Dialog, True)   # keeps it out of the taskbar on most Plasma setups
         self.setFocusPolicy(Qt.StrongFocus)
         w = self.state.get("window", {})

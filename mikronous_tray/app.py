@@ -21,10 +21,7 @@ def _tray_icon() -> QIcon:
     from . import theme
     pal = QApplication.palette()
     dark_panel = pal.window().color().lightness() < 128
-    icon = QIcon(str(theme.icon_path("symbolic-light" if dark_panel else "symbolic-dark")))
-    if icon.isNull():
-        icon = QIcon(str(theme.icon_path("color")))
-    return icon
+    return theme.qicon("symbolic-light" if dark_panel else "symbolic-dark")
 
 
 def send_control(command: str) -> bool:
@@ -49,7 +46,8 @@ class TrayApp(QObject):
         self.client = HermesClient()
         self.window = ChatWindow(self.client)
         from . import theme
-        app.setWindowIcon(QIcon(str(theme.icon_path("color"))))
+        app.setWindowIcon(theme.qicon("color"))
+        self.window.setWindowIcon(theme.qicon("color"))
         self._litany_pending = True
 
         self.control = QLocalServer(self)

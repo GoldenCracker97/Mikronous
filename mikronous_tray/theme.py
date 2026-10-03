@@ -130,6 +130,20 @@ def icon_path(kind: str = "color") -> Path:
     return ASSETS / ("mikronous-symbolic-dark.svg" if kind == "symbolic-dark" else "mikronous-symbolic-light.svg")
 
 
+def qicon(kind: str = "color"):
+    """A QIcon with real pixmaps at the usual sizes. An SVG-only QIcon reports no available sizes, so Qt
+    exports nothing to the window manager and KWin shows a '?' on the title bar."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon
+    src = QIcon(str(icon_path(kind)))
+    icon = QIcon()
+    for size in (16, 22, 24, 32, 48, 64, 128, 256):
+        pm = src.pixmap(QSize(size, size))
+        if not pm.isNull():
+            icon.addPixmap(pm)
+    return icon if not icon.isNull() else src
+
+
 def litany_lines(model: str, gateway_ok: bool) -> list[str]:
     return [
         "++ MACHINE SPIRIT AWAKENING ++",
