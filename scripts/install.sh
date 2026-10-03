@@ -252,21 +252,32 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
       echo "installed: $APPS/mikronous.desktop, autostart entry, icon"
       # Plasma only activates a .desktop file's X-KDE-Shortcuts once it is in kglobalshortcutsrc.
+      # Plasma 6 (KF6): nested group [services][mikronous.desktop], _launch=<keys>.
+      # Plasma 5 (KF5): flat group [mikronous.desktop], _launch=<keys>,none,<name> plus _k_friendly_name.
       HOTKEY="${MIKRONOUS_HOTKEY:-Meta+Space}"
-      if command -v kwriteconfig6 >/dev/null 2>&1; then KW=kwriteconfig6
-      elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; else KW=""; fi
+      if command -v kwriteconfig6 >/dev/null 2>&1; then KW=kwriteconfig6; KF=6
+      elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; KF=5; else KW=""; fi
+      write_hotkey() {
+        if [[ "$KF" == 6 ]]; then
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+        else
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch --delete 2>/dev/null || true
+          "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key _k_friendly_name "Mikronous"
+          "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key _launch "$HOTKEY,none,Mikronous"
+        fi
+      }
       if [[ -n "$KW" ]]; then
-        if ! grep -q "^_launch=$HOTKEY" <(sed -n '/^\[services\]\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null); then
+        if ! grep -qE "^_launch=$HOTKEY(,|$)" <(sed -n '/\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null); then
           # The daemon writes its in-memory table to the file when it stops, so stop it BEFORE writing.
           if systemctl --user is-active --quiet plasma-kglobalaccel.service 2>/dev/null; then
             systemctl --user stop plasma-kglobalaccel.service; sleep 1
-            "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+            write_hotkey
             systemctl --user start plasma-kglobalaccel.service
           else
             { command -v kquitapp6 >/dev/null 2>&1 && kquitapp6 kglobalaccel >/dev/null 2>&1; } \
               || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 kglobalaccel5 >/dev/null 2>&1; } || true
             sleep 1
-            "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+            write_hotkey
             (command -v kglobalaccel6 >/dev/null 2>&1 && setsid kglobalaccel6 >/dev/null 2>&1 &) \
               || (command -v kglobalaccel5 >/dev/null 2>&1 && setsid kglobalaccel5 >/dev/null 2>&1 &) || true
           fi
