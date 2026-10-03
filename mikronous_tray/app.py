@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -89,6 +90,14 @@ class TrayApp(QObject):
         self._orig_show = self.window.show_window
         self.window.show_window = self._show_with_litany  # first show after start plays the litany
 
+        # Windows: register the global hotkey ourselves (KDE does it through kglobalshortcutsrc).
+        self.hotkey = None
+        if sys.platform == "win32":
+            from .winhotkey import WinHotkey
+            self.hotkey = WinHotkey(settings.load().get("hotkey", "Ctrl+Alt+Space"), self.window.toggle, app)
+            if not self.hotkey.ok:
+                print(f"mikronous-tray: could not register hotkey {self.hotkey.spec}: {self.hotkey.error}", file=sys.stderr)
+
         # The model is loaded while the tray runs and unloaded when it quits.
         self.model = ModelService(self)
         self.model.state_changed.connect(self._model_state)
@@ -150,7 +159,10 @@ class TrayApp(QObject):
         from pathlib import Path
         d = Path(settings.load().get("notes_dir", "~/Mikronous/notes")).expanduser()
         d.mkdir(parents=True, exist_ok=True)
-        subprocess.Popen(["xdg-open", str(d)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if sys.platform == "win32":
+            os.startfile(str(d))  # noqa: S606
+        else:
+            subprocess.Popen(["xdg-open", str(d)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _status(self) -> None:
         h = self.client.health()
@@ -158,6 +170,8 @@ class TrayApp(QObject):
         self.tray.showMessage("Mikronous", text, QSystemTrayIcon.Information, 4000)
 
     def quit(self) -> None:
+        if self.hotkey:
+            self.hotkey.unregister()
         self.window.stop()
         if self.model.unload_on_quit():
             self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident

@@ -18,6 +18,8 @@ from . import __version__, doctor
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "model" and len(argv) > 1 and argv[1] in ("start", "stop", "restart", "running"):
+        return _model_server(argv[1])
     if argv and argv[0] == "model":  # hand everything after `model` to its own parser (keeps --help working)
         return _model(argv[1:])
     if argv and argv[0] == "ask":
@@ -65,6 +67,20 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
     return args.func(args)
+
+
+def _model_server(action: str) -> int:
+    """Start/stop the llama-server through the platform's runner (systemd on Linux, a process on Windows)."""
+    from mikronous_model import runner
+    if action == "running":
+        print("running" if runner.is_running() else "stopped")
+        return 0 if runner.is_running() else 1
+    ok = {"start": runner.start, "stop": runner.stop, "restart": runner.restart}[action]()
+    if action in ("start", "restart") and ok:
+        ok = runner.wait_until_up(180, progress=lambda: print(".", end="", file=sys.stderr, flush=True))
+        print("" if ok else "\nllama-server did not come up:\n" + runner.recent_log(), file=sys.stderr)
+    print(f"llama-server {action}: {'ok' if ok else 'failed'}")
+    return 0 if ok else 1
 
 
 def _model(rest: list[str]) -> int:

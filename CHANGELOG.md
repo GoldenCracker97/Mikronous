@@ -3,6 +3,23 @@
 All notable changes to Mikronous are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Windows support**: `scripts\install.ps1` installs everything natively on Windows 10/11 (no admin):
+  Hermes Agent when missing, the profile, plugin junctions, `mik`, a prebuilt llama.cpp (CUDA 13.4 /
+  CUDA 12.4 / Vulkan / CPU), the model, the gateway scheduled task, the tray with a `Ctrl+Alt+Space`
+  hotkey and Run-key autostart. Desktop tools use Windows toasts, `startfile` and PowerShell's clipboard;
+  reminders reach the tray over a named pipe. CI runs the test-suite on Windows too.
+- **Hermes auto-install**: both installers run Hermes's own installer (non-interactive) when `hermes`
+  is not found. `MIKRONOUS_SKIP_HERMES_INSTALL=1` opts out.
+- `mik model start|stop|restart|running` to control the model server on either OS.
+
+### Changed
+- The model server is managed through `mikronous_model.runner` (systemd on Linux, a detached process with a
+  pid file on Windows); `mik doctor`, `mik model` and the tray all use it.
+- Reminder scripts are Python files instead of shell scripts, so Hermes cron runs them on every OS.
+
 ## [0.1.0] - 2026-10-03
 
 First release. A local personal assistant for the KDE Plasma desktop, with Hermes Agent as the brain

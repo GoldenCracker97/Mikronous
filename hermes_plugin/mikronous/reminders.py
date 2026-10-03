@@ -141,10 +141,15 @@ def _scripts_dir() -> Path:
 
 
 def _write_script(message: str) -> str:
-    name = f"{SCRIPT_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}.sh"
+    """A no-agent cron script that prints the reminder text. Python, not shell: Hermes runs ``.py``
+    scripts on its own interpreter on every OS, while ``.sh`` needs bash (absent on Windows)."""
+    name = f"{SCRIPT_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}.py"
     path = _scripts_dir() / name
-    path.write_text("#!/bin/sh\n" + f"printf '%s\\n' {shlex.quote(message)}\n", encoding="utf-8")
-    path.chmod(0o755)
+    path.write_text(f"print({message!r})\n", encoding="utf-8")
+    try:
+        path.chmod(0o755)
+    except OSError:
+        pass
     return name
 
 
@@ -170,7 +175,7 @@ def _cleanup_scripts(active_jobs: list[dict]) -> None:
         referenced = {str(j.get("script") or "") for j in list_jobs(include_disabled=True)}
     except Exception:  # noqa: BLE001
         return
-    for p in _scripts_dir().glob(f"{SCRIPT_PREFIX}*.sh"):
+    for p in list(_scripts_dir().glob(f"{SCRIPT_PREFIX}*.sh")) + list(_scripts_dir().glob(f"{SCRIPT_PREFIX}*.py")):
         if p.name not in referenced:
             try:
                 p.unlink()

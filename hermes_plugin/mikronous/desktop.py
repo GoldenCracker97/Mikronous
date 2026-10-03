@@ -1,4 +1,6 @@
-"""KDE / freedesktop helpers behind the desktop tools: notifications, opening things, clipboard.
+"""Desktop helpers behind the desktop tools: notifications, opening things, clipboard.
+
+KDE / freedesktop on Linux; Windows toasts, ``os.startfile`` and PowerShell's clipboard on Windows.
 
 Every function returns a JSON-serialisable dict and never raises on a missing binary — the
 gateway may run under systemd without a full desktop environment, and the model needs a
@@ -12,8 +14,11 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+IS_WINDOWS = sys.platform == "win32"
 
 URGENCY = {"low": 0, "normal": 1, "critical": 2}
 APP_DIRS = [Path("~/.local/share/applications").expanduser(), Path("/usr/share/applications"),
@@ -46,6 +51,8 @@ def notify(title: str, body: str = "", urgency: str = "normal", timeout_ms: int 
     title = (title or "Mikronous").strip()[:200]
     body = (body or "").strip()[:2000]
     level = URGENCY.get(str(urgency).lower(), 1)
+    if IS_WINDOWS:
+        return _notify_windows(title, body)
     if timeout_ms is None:
         # 0 = stays until dismissed (critical); otherwise 10 s. Never pass -1: gdbus reads it as a flag.
         timeout_ms = 0 if level == 2 else 10000
@@ -134,6 +141,8 @@ def open_target(target: str, kind: str = "auto") -> dict:
         return {"error": "nothing to open"}
     if kind == "auto":
         kind = "url" if _looks_like_url(target) else "file" if Path(target).expanduser().exists() else "app"
+    if IS_WINDOWS:
+        return _open_windows(target, kind)
     if kind in ("url", "file"):
         path_or_url = str(Path(target).expanduser()) if kind == "file" else target
         if kind == "file" and not Path(path_or_url).exists():
@@ -175,6 +184,8 @@ def open_target(target: str, kind: str = "auto") -> dict:
 
 # ----------------------------------------------------------------------------- clipboard
 def clipboard_get() -> dict:
+    if IS_WINDOWS:
+        return _clipboard_windows_get()
     attempts = (
         ["qdbus6", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.getClipboardContents"],
         ["qdbus", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.getClipboardContents"],
@@ -199,6 +210,8 @@ def clipboard_get() -> dict:
 
 def clipboard_set(text: str) -> dict:
     text = text if text is not None else ""
+    if IS_WINDOWS:
+        return _clipboard_windows_set(text)
     attempts = (
         (["qdbus6", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.setClipboardContents", text], None),
         (["qdbus", "org.kde.klipper", "/klipper", "org.kde.klipper.klipper.setClipboardContents", text], None),
@@ -218,3 +231,105 @@ def clipboard_set(text: str) -> dict:
         except (OSError, subprocess.SubprocessError) as exc:
             errs.append(f"{cmd[0]}: {exc}")
     return {"error": "clipboard unavailable: " + ("; ".join(errs) or "no clipboard tool found")}
+
+
+# ----------------------------------------------------------------------------- Windows
+_PS = ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"]
+# PowerShell's own AppUserModelID: toasts shown under it need no registration of our own.
+_PS_AUMID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+_TOAST_PS = r"""
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$n = $t.GetElementsByTagName("text")
+$n.Item(0).AppendChild($t.CreateTextNode($env:MIK_TITLE)) | Out-Null
+$n.Item(1).AppendChild($t.CreateTextNode($env:MIK_BODY)) | Out-Null
+$toast = [Windows.UI.Notifications.ToastNotification]::new($t)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($env:MIK_AUMID).Show($toast)
+"""
+
+
+def _notify_windows(title: str, body: str) -> dict:
+    env = {**os.environ, "MIK_TITLE": title, "MIK_BODY": body, "MIK_AUMID": _PS_AUMID}
+    try:
+        res = subprocess.run(_PS + [_TOAST_PS], env=env, capture_output=True, text=True, timeout=20,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"error": f"toast failed: {exc}"}
+    if res.returncode == 0:
+        return {"ok": True, "via": "windows-toast"}
+    return {"error": f"toast failed: {res.stderr.strip()[:300]}"}
+
+
+_START_MENU_DIRS = [Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+                    Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Microsoft/Windows/Start Menu/Programs"]
+
+
+def _find_shortcut(name: str) -> list[Path]:
+    needle = name.lower()
+    hits: list[tuple[int, Path]] = []
+    for base in _START_MENU_DIRS:
+        if not base.exists():
+            continue
+        for lnk in base.rglob("*.lnk"):
+            stem = lnk.stem.lower()
+            if stem == needle:
+                hits.append((0, lnk))
+            elif stem.startswith(needle):
+                hits.append((1, lnk))
+            elif needle in stem:
+                hits.append((2, lnk))
+    hits.sort(key=lambda t: (t[0], len(t[1].stem)))
+    return [p for _, p in hits]
+
+
+def _open_windows(target: str, kind: str) -> dict:
+    if kind in ("url", "file"):
+        path_or_url = str(Path(target).expanduser()) if kind == "file" else target
+        if kind == "file" and not Path(path_or_url).exists():
+            return {"error": f"file not found: {path_or_url}"}
+        try:
+            os.startfile(path_or_url)  # noqa: S606
+            return {"ok": True, "opened": path_or_url, "via": "startfile"}
+        except OSError as exc:
+            return {"error": str(exc)}
+    exe = shutil.which(target)
+    if exe:
+        try:
+            subprocess.Popen([exe], creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+            return {"ok": True, "launched": target, "via": "path"}
+        except OSError as exc:
+            return {"error": str(exc)}
+    matches = _find_shortcut(target)
+    if not matches:
+        return {"error": f"no installed application matches '{target}'"}
+    try:
+        os.startfile(str(matches[0]))  # noqa: S606
+        return {"ok": True, "launched": matches[0].stem, "shortcut": str(matches[0]),
+                "other_matches": [m.stem for m in matches[1:4]]}
+    except OSError as exc:
+        return {"error": str(exc)}
+
+
+def _clipboard_windows_get() -> dict:
+    try:
+        res = subprocess.run(_PS + ["Get-Clipboard -Raw"], capture_output=True, text=True, timeout=10,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"error": f"clipboard unavailable: {exc}"}
+    if res.returncode != 0:
+        return {"error": f"clipboard unavailable: {res.stderr.strip()[:200]}"}
+    text = res.stdout
+    return {"ok": True, "text": text[:20000], "truncated": len(text) > 20000, "via": "powershell"}
+
+
+def _clipboard_windows_set(text: str) -> dict:
+    try:
+        res = subprocess.run(_PS + ["Set-Clipboard -Value ([Console]::In.ReadToEnd())"], input=text,
+                             capture_output=True, text=True, timeout=10,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"error": f"clipboard unavailable: {exc}"}
+    if res.returncode != 0:
+        return {"error": f"clipboard unavailable: {res.stderr.strip()[:200]}"}
+    return {"ok": True, "chars": len(text), "via": "powershell"}

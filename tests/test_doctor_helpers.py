@@ -1,8 +1,11 @@
-import os
+import sys
+
+import pytest
 
 from mikronous_cli import doctor
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="KDE shortcut file is Linux-only")
 def test_shortcut_key_kf5_kf6_and_missing(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".config").mkdir()
@@ -18,4 +21,5 @@ def test_shortcut_key_kf5_kf6_and_missing(tmp_path, monkeypatch):
 
 def test_tray_running_false_without_socket(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
-    assert doctor._tray_running() is False
+    if sys.platform != "win32":
+        assert doctor._tray_running() is False

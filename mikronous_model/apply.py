@@ -63,33 +63,18 @@ def download(repo: str, filename: str, dest_dir: Path = MODELS_DIR) -> Path:
     return dest
 
 
-def systemctl(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True)
-
-
 def restart_and_wait(port: str = "8081", timeout: float = 180.0) -> bool:
-    if not shutil.which("systemctl"):
-        print("systemctl not available; restart llama-server yourself", file=sys.stderr)
+    from . import runner
+    if not runner.available():
+        print("no service manager available; restart llama-server yourself", file=sys.stderr)
         return False
-    systemctl("daemon-reload")
-    res = systemctl("restart", UNIT)
-    if res.returncode != 0:
-        print(res.stderr.strip() or res.stdout.strip(), file=sys.stderr)
+    if not runner.restart():
+        print("could not restart llama-server", file=sys.stderr)
         return False
-    print(f"restarting {UNIT}, waiting for :{port} ", end="", file=sys.stderr, flush=True)
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=3):  # noqa: S310
-                print(" up", file=sys.stderr)
-                return True
-        except (urllib.error.URLError, OSError):
-            pass
-        if systemctl("is-active", UNIT).stdout.strip() not in ("active", "activating"):
-            break
-        print(".", end="", file=sys.stderr, flush=True)
-        time.sleep(2)
+    print(f"restarting llama-server ({runner.mode()}), waiting for :{port} ", end="", file=sys.stderr, flush=True)
+    if runner.wait_until_up(timeout, progress=lambda: print(".", end="", file=sys.stderr, flush=True)):
+        print(" up", file=sys.stderr)
+        return True
     print("\nllama-server did not come up. Last log lines:", file=sys.stderr)
-    log = subprocess.run(["journalctl", "--user", "-u", UNIT, "-n", "25", "--no-pager"], capture_output=True, text=True)
-    print(log.stdout, file=sys.stderr)
+    print(runner.recent_log(25), file=sys.stderr)
     return False

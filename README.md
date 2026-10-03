@@ -1,6 +1,6 @@
 # Mikronous
 
-A small, local personal assistant for the KDE Plasma desktop. The brain is
+A small, local personal assistant for the desktop (KDE Plasma on Linux, and Windows 10/11). The brain is
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research, MIT) with its
 full toolset: memory, skills, reminders, files, terminal, web and browser. The model runs on
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
@@ -27,8 +27,8 @@ Requirements: Linux with KDE Plasma 5.27 or 6 and a systemd user session, Python
 with 8 GB or more of VRAM (NVIDIA via CUDA prebuilts, AMD/Intel via Vulkan; CPU-only works with
 small models).
 
-1. Install Hermes Agent: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`
-2. Clone this repo at the release tag and run the installer:
+Clone this repo at the release tag and run the installer (it installs Hermes Agent for you when it is
+missing, non-interactively):
 
 ```bash
 git clone https://github.com/GoldenCracker97/Mikronous && cd Mikronous
@@ -94,6 +94,25 @@ chose on re-runs; `MIKRONOUS_VOICE=plain scripts/install.sh` sets a different de
    approval card appears for the `chmod`.
 6. New chat tomorrow: "What is my name?" → answered from memory once you have told it.
 
+## Windows
+
+The same assistant runs natively on Windows 10/11 (Hermes Agent has a native Windows install). What
+differs is only the plumbing: the model runs as a background `llama-server.exe` process managed by the
+tray and `mik model start|stop`, the gateway is a Scheduled Task created by `hermes gateway install`,
+reminders arrive as Windows toasts, the hotkey is `Ctrl+Alt+Space` (`Win+Space` belongs to Windows),
+and the tray autostarts through the per-user Run key. No admin rights are needed. Everything lives under
+`%LOCALAPPDATA%\hermes` and `%LOCALAPPDATA%\mikronous`.
+
+```powershell
+git clone https://github.com/GoldenCracker97/Mikronous; cd Mikronous
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1      # -NoModel, -NoTray, -Hotkey "Ctrl+Alt+M", -Voice light
+mik doctor
+```
+
+Both installers install Hermes Agent themselves when it is missing (`MIKRONOUS_SKIP_HERMES_INSTALL=1`
+opts out). Status: the Windows port is new and has had less real-desktop testing than the KDE version;
+please report what breaks.
+
 ## What leaves your machine
 
 | | |
@@ -118,7 +137,7 @@ chose on re-runs; `MIKRONOUS_VOICE=plain scripts/install.sh` sets a different de
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
 | `mik voice [plain\|light\|full]` | How much machine-priest the assistant speaks |
-| `systemctl --user restart mikronous-llama` | Restart the model server after editing `~/.config/mikronous/llama.env` |
+| `mik model start\|stop\|restart` | Start or stop the model server by hand (systemd on Linux, a background process on Windows) |
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
 `mik` is this project's own CLI.
@@ -217,7 +236,7 @@ profile/voices/     Persona levels swapped into SOUL.md by `mik voice`
 packaging/          .desktop files (Meta+Space shortcut, autostart) and icon
 skills/             Skills shipped with Mikronous
 systemd/            User units + env template
-scripts/            install.sh, install-llama.sh, fetch-model.sh
+scripts/            install.sh, install-llama.sh, fetch-model.sh (Linux); install.ps1 (Windows)
 ```
 
 ## Contributing

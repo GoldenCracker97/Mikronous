@@ -14,7 +14,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-DATA_DIR = Path(os.environ.get("MIKRONOUS_DATA_DIR", "~/.local/share/mikronous")).expanduser()
+from ._paths import data_dir as _data_dir
+
+DATA_DIR = _data_dir()
 DB_PATH = DATA_DIR / "docs.sqlite"
 TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".org", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml", ".ini",
             ".cfg", ".log", ".tex", ".html", ".htm", ".xml", ".py", ".js", ".ts", ".sh", ".c", ".h", ".cpp", ".java",

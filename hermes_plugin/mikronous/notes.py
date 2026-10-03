@@ -23,8 +23,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from ._paths import data_dir as _data_dir
+
 NOTES_DIR = Path(os.environ.get("MIKRONOUS_NOTES_DIR", "~/Mikronous/notes")).expanduser()
-DB_PATH = Path(os.environ.get("MIKRONOUS_DATA_DIR", "~/.local/share/mikronous")).expanduser() / "notes.sqlite"
+DB_PATH = _data_dir() / "notes.sqlite"
 _HEADER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 
 

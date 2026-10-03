@@ -107,16 +107,23 @@ def test_window_turn_with_approval(app):
 
 
 def test_inbox_socket(app):
+    import sys
     from mikronous_tray import settings
     from mikronous_tray.inbox import InboxServer
+    from mikronous_cli.platform import INBOX_NAME, local_server_path
     got = []
     ib = InboxServer()
     assert ib.start()
     ib.message.connect(got.append)
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(str(settings.socket_path()))
-    s.sendall((json.dumps({"ts": 1, "chat_id": "desktop", "text": "Stretch", "title": "Reminder"}) + "\n").encode())
-    s.close()
+    line = (json.dumps({"ts": 1, "chat_id": "desktop", "text": "Stretch", "title": "Reminder"}) + "\n").encode()
+    if sys.platform == "win32":
+        with open(local_server_path(INBOX_NAME), "r+b", buffering=0) as pipe:   # same path the plugin uses
+            pipe.write(line)
+    else:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(str(settings.socket_path()))
+        s.sendall(line)
+        s.close()
     assert pump(app, lambda: got, 5)
     assert got[0]["text"] == "Stretch"
     ib.stop()
@@ -124,7 +131,9 @@ def test_inbox_socket(app):
 
 def test_model_service_without_systemd(app, monkeypatch):
     from mikronous_tray import model_service
-    monkeypatch.setattr(model_service.shutil, "which", lambda name: None)
+    from mikronous_model import runner
+    monkeypatch.setattr(runner, "available", lambda: False)
+    monkeypatch.setattr(runner, "is_running", lambda: False)
     monkeypatch.setattr(model_service.ModelService, "answers", staticmethod(lambda: False))
     svc = model_service.ModelService()
     assert svc.refresh() == "unknown"
@@ -137,20 +146,23 @@ def test_model_service_without_systemd(app, monkeypatch):
 
 def test_model_service_systemd_flow(app, monkeypatch):
     from mikronous_tray import model_service
+    from mikronous_model import runner
     calls = []
-    monkeypatch.setattr(model_service.shutil, "which", lambda name: "/bin/systemctl")
     state = {"active": False, "answers": False}
 
-    def fake_systemctl(*args):
-        calls.append(args)
-        class R:
-            stdout = "active\n" if state["active"] else "inactive\n"
-        if args[0] == "start":
-            state["active"] = True
-        if args[0] == "stop":
-            state["active"] = False
-        return R()
-    monkeypatch.setattr(model_service, "_systemctl", fake_systemctl)
+    def fake(action):
+        def f():
+            calls.append((action, model_service.UNIT))
+            if action == "start":
+                state["active"] = True
+            if action == "stop":
+                state["active"] = False
+            return True
+        return f
+    monkeypatch.setattr(runner, "available", lambda: True)
+    monkeypatch.setattr(runner, "is_running", lambda: state["active"])
+    monkeypatch.setattr(runner, "start", fake("start"))
+    monkeypatch.setattr(runner, "stop", fake("stop"))
     monkeypatch.setattr(model_service.ModelService, "answers", staticmethod(lambda: state["answers"]))
     seen = []
     svc = model_service.ModelService()

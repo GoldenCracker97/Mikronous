@@ -1,41 +1,21 @@
 """Load and unload the local model with the tray.
 
-The model lives in ``mikronous-llama.service`` (llama-server, systemd user unit). The tray starts it
-when it launches and stops it on Quit, so quitting Mikronous frees the VRAM. ``MIKRONOUS_KEEP_MODEL=1``
-keeps the service running across Quit. Everything is best-effort and silent where systemd is absent.
+The model is llama-server, run by ``mikronous_model.runner`` (systemd unit on Linux, a detached process
+on Windows). The tray starts it when it launches and stops it on Quit, so quitting Mikronous frees the
+VRAM. ``MIKRONOUS_KEEP_MODEL=1`` keeps it running across Quit. Best-effort where no manager exists.
 """
 
 from __future__ import annotations
 
-import json
 import os
-import shutil
-import subprocess
-import urllib.request
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-UNIT = "mikronous-llama.service"
+from mikronous_model import runner
+
+UNIT = runner.UNIT
 POLL_MS = 1500
 WAKE_TIMEOUT_MS = 180_000     # a 14B model on a slow disk can take a while
-
-
-def _systemctl(*args: str) -> subprocess.CompletedProcess | None:
-    if not shutil.which("systemctl"):
-        return None
-    try:
-        return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-
-
-def _models_url() -> str:
-    try:
-        from mikronous_cli.paths import LLAMA_ENV, read_env
-        port = read_env(LLAMA_ENV).get("LLAMA_PORT", "8081")
-    except Exception:  # noqa: BLE001
-        port = "8081"
-    return f"http://127.0.0.1:{port}/v1/models"
 
 
 class ModelService(QObject):
@@ -53,20 +33,15 @@ class ModelService(QObject):
     # ------------------------------------------------------------------ queries
     @staticmethod
     def available() -> bool:
-        return shutil.which("systemctl") is not None
+        return runner.available()
 
     @staticmethod
     def unit_active() -> bool:
-        r = _systemctl("is-active", UNIT)
-        return bool(r) and r.stdout.strip() == "active"
+        return runner.is_running()
 
     @staticmethod
     def answers() -> bool:
-        try:
-            with urllib.request.urlopen(_models_url(), timeout=1.5) as resp:  # noqa: S310 - loopback
-                return bool(json.loads(resp.read().decode("utf-8") or "{}").get("data"))
-        except Exception:  # noqa: BLE001
-            return False
+        return runner.answers()
 
     def refresh(self) -> str:
         if not self.available():
@@ -86,7 +61,7 @@ class ModelService(QObject):
         if self.refresh() == "ready":
             return
         if self.available() and self.state == "unloaded":
-            _systemctl("start", UNIT)
+            runner.start()
         self._set("waking")
         self._waited = 0
         self._poll.start()
@@ -94,7 +69,7 @@ class ModelService(QObject):
     def unload(self) -> None:
         self._poll.stop()
         if self.available():
-            _systemctl("stop", UNIT)
+            runner.stop()
         self._set("unloaded")
 
     def unload_on_quit(self) -> bool:

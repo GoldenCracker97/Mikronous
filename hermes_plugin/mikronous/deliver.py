@@ -9,17 +9,24 @@ from __future__ import annotations
 import json
 import os
 import socket
+import sys
 import time
 from pathlib import Path
 
 from . import desktop
+from ._paths import data_dir
 
-DATA_DIR = Path(os.environ.get("MIKRONOUS_DATA_DIR", "~/.local/share/mikronous")).expanduser()
+IS_WINDOWS = sys.platform == "win32"
+DATA_DIR = data_dir()
 INBOX = DATA_DIR / "inbox.jsonl"
 MAX_NOTIFY_CHARS = 600
+PIPE_NAME = "mikronous-inbox"
 
 
 def socket_path() -> Path:
+    """Where the tray listens: a Unix socket on Linux, a named pipe on Windows (QLocalServer on both ends)."""
+    if IS_WINDOWS:
+        return Path(rf"\\.\pipe\{PIPE_NAME}")
     runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     return Path(runtime) / "mikronous.sock"
 
@@ -55,6 +62,13 @@ def _split_title(text: str) -> tuple[str, str]:
 
 def _push_to_tray(payload: dict) -> bool:
     path = socket_path()
+    if IS_WINDOWS:
+        try:
+            with open(str(path), "r+b", buffering=0) as pipe:
+                pipe.write((json.dumps(payload) + "\n").encode("utf-8"))
+            return True
+        except OSError:
+            return False   # tray not running: the inbox file and the toast still deliver
     if not path.exists():
         return False
     try:

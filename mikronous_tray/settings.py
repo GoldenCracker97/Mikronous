@@ -11,12 +11,14 @@ import os
 from pathlib import Path
 
 from mikronous_cli.paths import CONF_DIR
+from mikronous_cli.platform import CONTROL_NAME, INBOX_NAME, local_server_name
 
 STATE_FILE = CONF_DIR / "tray.json"
 DEFAULTS = {
     "session_id": "",
     "window": {"width": 520, "height": 680},
     "notes_dir": os.environ.get("MIKRONOUS_NOTES_DIR", "~/Mikronous/notes"),
+    "hotkey": "Ctrl+Alt+Space",     # Windows only; on KDE the shortcut lives in kglobalshortcutsrc
 }
 
 
@@ -40,9 +42,9 @@ def save(**changes) -> None:
 
 
 def socket_path() -> Path:
-    """Same path the Hermes plugin pushes to (hermes_plugin/mikronous/deliver.py)."""
-    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(runtime) / "mikronous.sock"
+    """QLocalServer name the Hermes plugin pushes to (hermes_plugin/mikronous/deliver.py): a socket path on
+    Linux ($XDG_RUNTIME_DIR/mikronous.sock), a pipe name on Windows."""
+    return Path(local_server_name(INBOX_NAME))
 
 
-CONTROL_SERVER = "mikronous-tray"   # QLocalServer name for single-instance + `mik toggle`
+CONTROL_SERVER = CONTROL_NAME   # QLocalServer name for single-instance + `mik toggle`

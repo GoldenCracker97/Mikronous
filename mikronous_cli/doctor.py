@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 
 from .paths import HERMES_HOME, LLAMA_ENV, PROFILE, PROFILE_HOME, gateway, read_env
+from .platform import IS_WINDOWS, local_server_path
 
 OK, WARN, FAIL = "ok", "warn", "FAIL"
 _read_env = read_env
@@ -72,8 +73,13 @@ def run_checks() -> list[tuple[str, str, str]]:
             rows.append(("llama-server binary", OK, f"{server} [{backend}{' ' + tag if tag else ''}]"))
         else:
             rows.append(("llama-server binary", FAIL, server or "LLAMA_SERVER unset"))
-    state = _systemd_active("mikronous-llama.service")
-    rows.append(("mikronous-llama.service", OK if state == "active" else WARN, state or "systemctl unavailable"))
+    try:
+        from mikronous_model import runner
+        running = runner.is_running()
+        rows.append((f"llama-server ({runner.mode()})", OK if running else WARN,
+                     "running" if running else f"stopped — start with `mik model start` ({runner.restart_hint()})"))
+    except Exception as exc:  # noqa: BLE001
+        rows.append(("llama-server", WARN, f"could not query ({exc.__class__.__name__})"))
     try:
         data = _http_json(f"http://127.0.0.1:{port}/v1/models")
         ids = [m.get("id") for m in data.get("data", [])]
@@ -91,8 +97,12 @@ def run_checks() -> list[tuple[str, str, str]]:
         rows.append(("host API server enabled", OK if enabled else FAIL,
                      "API_SERVER_ENABLED=true in ~/.hermes/.env" if enabled
                      else "add API_SERVER_ENABLED=true (+KEY, PORT) to ~/.hermes/.env — re-run scripts/install.sh"))
-    state = _systemd_active(gw.service)
-    rows.append((f"{gw.service} ({gw.mode})", OK if state == "active" else WARN, state or "systemctl unavailable"))
+    if IS_WINDOWS:
+        rows.append((f"gateway ({gw.mode})", OK if _hermes_gateway_running() else WARN,
+                     "running" if _hermes_gateway_running() else "not running — `hermes -p mikronous gateway start`"))
+    else:
+        state = _systemd_active(gw.service)
+        rows.append((f"{gw.service} ({gw.mode})", OK if state == "active" else WARN, state or "systemctl unavailable"))
     try:
         data = _http_json(f"{gw.v1}/models", headers={"Authorization": f"Bearer {gw.api_key}"})
         ids = [m.get("id") for m in data.get("data", [])]
@@ -115,15 +125,27 @@ def run_checks() -> list[tuple[str, str, str]]:
     # 7. Desktop: tray running? global shortcut registered?
     rows.append(("tray", OK if _tray_running() else WARN,
                  "running (control socket answers)" if _tray_running() else "not running — start with `mik tray` (autostarts at login)"))
-    key = _shortcut_key()
-    rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
-                 else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
+    if IS_WINDOWS:
+        auto = _windows_autostart()
+        rows.append(("autostart", OK if auto else WARN, "registry Run key set" if auto else "missing — run scripts\\install.ps1"))
+        rows.append(("shortcut", OK if _tray_running() else WARN,
+                     "Ctrl+Alt+Space (registered by the tray while it runs)" if _tray_running() else "registered when the tray runs"))
+    else:
+        key = _shortcut_key()
+        rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
+                     else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
 
     return rows
 
 
 def _tray_running() -> bool:
-    """Qt places a QLocalServer named 'mikronous-tray' at $XDG_RUNTIME_DIR/mikronous-tray (or /tmp)."""
+    """The tray's control QLocalServer: a socket under $XDG_RUNTIME_DIR (or /tmp) on Linux, a named pipe on Windows."""
+    if IS_WINDOWS:
+        try:
+            with open(local_server_path("mikronous-tray"), "rb"):
+                return True
+        except OSError:
+            return False
     import socket
     runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     for path in (Path(runtime) / "mikronous-tray", Path("/tmp/mikronous-tray")):
@@ -137,6 +159,25 @@ def _tray_running() -> bool:
         except OSError:
             continue
     return False
+
+
+def _hermes_gateway_running() -> bool:
+    from .platform import hermes_bin
+    try:
+        out = subprocess.run([hermes_bin(), "-p", PROFILE, "gateway", "status"], capture_output=True, text=True, timeout=30)
+        return "running" in (out.stdout + out.stderr).lower() and "not running" not in (out.stdout + out.stderr).lower()
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _windows_autostart() -> bool:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run") as k:
+            winreg.QueryValueEx(k, "Mikronous")
+            return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _shortcut_key() -> str:

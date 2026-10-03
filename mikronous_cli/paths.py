@@ -18,10 +18,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .platform import IS_WINDOWS, conf_dir, hermes_home
+
 PROFILE = "mikronous"
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+HERMES_HOME = hermes_home()
 PROFILE_HOME = HERMES_HOME / "profiles" / PROFILE
-CONF_DIR = Path("~/.config/mikronous").expanduser()
+CONF_DIR = conf_dir()
 LLAMA_ENV = CONF_DIR / "llama.env"
 USER_UNIT_DIR = Path("~/.config/systemd/user").expanduser()
 
@@ -83,4 +85,5 @@ def gateway() -> Gateway:
         return Gateway("multiplex", "hermes-gateway.service", f"http://{host}:{port}/p/{PROFILE}", key)
     host = profile_env.get("API_SERVER_HOST", "127.0.0.1")
     port = profile_env.get("API_SERVER_PORT", "8642")
-    return Gateway("standalone", f"hermes-gateway-{PROFILE}.service", f"http://{host}:{port}", key)
+    service = f"Hermes_Gateway_{PROFILE} (scheduled task)" if IS_WINDOWS else f"hermes-gateway-{PROFILE}.service"
+    return Gateway("standalone", service, f"http://{host}:{port}", key)

@@ -36,9 +36,9 @@ def _budget(hw: HardwareProfile, backend_cpu: bool = False) -> tuple[float, str]
 
 def _llama_running() -> bool:
     try:
-        return subprocess.run(["systemctl", "--user", "is-active", "--quiet", apply_mod.UNIT],
-                              capture_output=True).returncode == 0
-    except OSError:
+        from . import runner
+        return runner.is_running()
+    except Exception:  # noqa: BLE001
         return False
 
 

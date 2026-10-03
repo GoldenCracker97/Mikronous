@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 
 MiB = 1024 * 1024
@@ -121,9 +122,29 @@ def _vulkan() -> list[GPU]:
     return gpus
 
 
+def _windows_memory() -> tuple[int, int]:
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong), ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong), ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong), ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong), ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+    st = MEMORYSTATUSEX()
+    st.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+        return int(st.ullTotalPhys), int(st.ullAvailPhys)
+    return 0, 0
+
+
 def detect() -> HardwareProfile:
     prof = HardwareProfile()
     prof.gpus = _nvidia() or _amd() or _vulkan()
+    if sys.platform == "win32":
+        prof.ram_bytes, prof.ram_available_bytes = _windows_memory()
+        prof.cpu_threads = os.cpu_count() or 1
+        prof.cpu_name = os.environ.get("PROCESSOR_IDENTIFIER", "")
+        return prof
     try:
         meminfo = {}
         with open("/proc/meminfo", encoding="utf-8") as fh:
