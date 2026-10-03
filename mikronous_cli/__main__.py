@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     p_docs.add_argument("rest", nargs=argparse.REMAINDER)
     p_docs.set_defaults(func=lambda a: _docs(a.rest))
 
-    sub.add_parser("voice", help="how much tech-priest the assistant speaks: plain | light | full (no arg: show)")
+    sub.add_parser("voice", help="how much machine-priest the assistant speaks: plain | light | full (no arg: show)")
     sub.add_parser("tray", help="run the tray app (chat window, Meta+Space target, reminder inbox)")
     sub.add_parser("toggle", help="show/hide the chat window; starts the tray when it is not running")
 

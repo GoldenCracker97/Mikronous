@@ -101,7 +101,7 @@ def test_window_turn_with_approval(app):
         assert needle in txt
     w.play_litany()
     w._render()
-    assert "OMNISSIAH PROVIDES" in w.view.toPlainText()
+    assert "MACHINE GOD PROVIDES" in w.view.toPlainText()
     w.play_litany()
     assert sum(1 for m in w.messages if m["role"] == "litany") == 1
 

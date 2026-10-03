@@ -23,7 +23,7 @@ and llama.cpp on your own GPU.
 - **Tray app** (`mik tray`): `Meta+Space` chat window on the Hermes runs API with streamed replies, tool
   activity, approval cards, Stop, New chat, sessions that survive restarts, and a reminder inbox socket.
   Installer registers the shortcut for both Plasma 5 and Plasma 6 and an autostart entry.
-- **Adeptus Mechanicus theme**: data-slate window (iron, brass, Martian red, phosphor green), original
+- **Machine Cult theme**: data-slate window (iron, brass, Martian red, phosphor green), original
   cog-and-circuit icons, bundled OFL fonts, boot litany, and persona voice levels (`mik voice
   plain|light|full`).
 - **`mik doctor`**: one-screen health check of every piece, including tray and shortcut state.
@@ -35,7 +35,7 @@ and llama.cpp on your own GPU.
 - With the default `approvals.mode: smart`, the approval card only appears when Hermes's guardian pass
   escalates or denies; `mikronous config set approvals.mode manual` asks every time.
 - Small models (8B and under) occasionally omit a field in a tool call; `set_reminder` tolerates the
-  common cases. If the full tech-priest voice makes your model skip tool calls, use `mik voice light`.
+  common cases. If the full machine-priest voice makes your model skip tool calls, use `mik voice light`.
 - `mikronous -z` one-shots cannot create reminders (Hermes hides scheduling there); use the tray,
   `mikronous chat`, or `mik ask`.
 

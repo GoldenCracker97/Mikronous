@@ -1,4 +1,4 @@
-"""`mik voice [plain|light|full]` — how much Adeptus Mechanicus the assistant speaks.
+"""`mik voice [plain|light|full]` — how much Machine Cult the assistant speaks.
 
 Swaps the block between ``<!-- voice:start -->`` and ``<!-- voice:end -->`` in the profile's SOUL.md
 with the chosen file from ``profile/voices/`` and updates the sha the installer uses to tell "our

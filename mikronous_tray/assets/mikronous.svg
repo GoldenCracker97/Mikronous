@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Mikronous: half cog, half circuit. Original design (Mechanicus-inspired, not a Games Workshop mark). -->
+  <!-- Mikronous: half cog, half circuit. Original design (Machine Cult flavour, no trademarked emblem). -->
   <defs>
     <clipPath id="left"><rect x="0" y="0" width="32" height="64"/></clipPath>
     <clipPath id="right"><rect x="32" y="0" width="32" height="64"/></clipPath>

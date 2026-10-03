@@ -1,4 +1,4 @@
-"""The Mechanicus theme: palette tokens, bundled fonts, stylesheet, icons, and cant strings.
+"""The Machine Cult theme: palette tokens, bundled fonts, stylesheet, icons, and cant strings.
 
 Always dark by design (it does not follow the KDE colour scheme). Everything visual in the tray
 reads its colours from ``TOKENS`` so the theme lives in one file.
@@ -38,7 +38,7 @@ FALLBACK_MONO = "monospace"
 CANT = {
     "idle": "",
     "thinking": "++ COGITATING ++",
-    "approval": "++ AWAITING SANCTION OF THE MAGOS ++",
+    "approval": "++ AWAITING SANCTION OF THE MAGISTER ++",
     "complete": "++ RITE COMPLETE ++",
     "interrupted": "++ RITE INTERRUPTED ++",
     "stopping": "++ CEASING ++",
@@ -149,7 +149,7 @@ def litany_lines(model: str, gateway_ok: bool) -> list[str]:
         "++ MACHINE SPIRIT AWAKENING ++",
         f"++ COGITATOR: {model or 'unknown'} ++",
         f"++ GATEWAY: {'ONLINE' if gateway_ok else 'UNREACHABLE'} ++",
-        "++ THE OMNISSIAH PROVIDES ++",
+        "++ THE MACHINE GOD PROVIDES ++",
     ]
 
 
