@@ -186,8 +186,11 @@ GATEWAY_MODE=""
 if is_multiplexed; then
   GATEWAY_MODE=multiplex
 else
+  # Profile runs its own gateway (gateway.standalone: true in its config, or an older Hermes).
+  [[ -f "$UNIT_DIR/hermes-gateway-$PROFILE.service" ]] && already=1 || already=0
   printf 'y\ny\ny\n' | hp gateway install; rc=$?
   if [[ $rc -eq 0 ]]; then GATEWAY_MODE=standalone
+  elif [[ $rc -eq 78 && "$already" == 1 ]]; then GATEWAY_MODE=standalone
   elif [[ $rc -eq 78 ]]; then GATEWAY_MODE=multiplex; echo "(per-profile gateways are retired; using the shared host gateway)"
   else fail "gateway install failed (exit $rc); run: hermes -p $PROFILE gateway install"; fi
 fi
@@ -207,9 +210,21 @@ case "$GATEWAY_MODE" in
     API_URL="http://127.0.0.1:${API_PORT:-8642}/p/$PROFILE/v1"
     ;;
   standalone)
+    # Our own listener must not collide with the default profile's API server (8642).
+    HOST_PORT="$(grep ^API_SERVER_PORT= "$DEFAULT_ENV" 2>/dev/null | cut -d= -f2)"; HOST_PORT="${HOST_PORT:-8642}"
+    API_PORT="$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2 | cut -d' ' -f1)"
+    if [[ -z "$API_PORT" || "$API_PORT" == "$HOST_PORT" ]]; then
+      API_PORT=$(( HOST_PORT + 1 ))
+      if grep -q '^API_SERVER_PORT=' "$PROFILE_HOME/.env"; then sed -i "s|^API_SERVER_PORT=.*|API_SERVER_PORT=$API_PORT|" "$PROFILE_HOME/.env"
+      else echo "API_SERVER_PORT=$API_PORT" >> "$PROFILE_HOME/.env"; fi
+      echo "set API_SERVER_PORT=$API_PORT in $PROFILE_HOME/.env (host gateway owns $HOST_PORT)"
+    fi
+    # If a host gateway is running it must stop serving this profile; a restart makes it re-read the flag.
+    if [[ -f "$UNIT_DIR/hermes-gateway.service" ]] && systemctl --user is-active --quiet hermes-gateway.service; then
+      printf 'y\ny\n' | hermes gateway restart >/dev/null 2>&1 || true
+    fi
     printf 'y\ny\n' | hp gateway restart || printf 'y\ny\n' | hp gateway start || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
-    API_PORT="$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2)"
-    API_URL="http://127.0.0.1:${API_PORT:-8642}/v1"
+    API_URL="http://127.0.0.1:${API_PORT}/v1"
     ;;
   *) API_URL="(gateway not installed)" ;;
 esac

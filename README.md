@@ -50,12 +50,13 @@ with `MIKRONOUS_LLAMA_REINSTALL=1`.
 
 Already running your own llama-server on `:8081`? Use `scripts/install.sh --no-model`.
 
-**Gateway topology.** Hermes 0.21+ runs one host gateway (`hermes-gateway.service`, your default
-profile) that serves every profile. The installer enables the API server on it and the Mikronous
-endpoint becomes `http://127.0.0.1:8642/p/mikronous/v1`, authenticated with the `API_SERVER_KEY`
-from `~/.hermes/profiles/mikronous/.env`. On older Hermes the profile gets its own
-`hermes-gateway-mikronous.service` and plain `http://127.0.0.1:8642/v1`. `mik doctor` prints
-whichever applies.
+**Gateway topology.** The Mikronous profile runs its own gateway process
+(`hermes-gateway-mikronous.service`, `gateway.standalone: true` in its config) with its API server on
+`http://127.0.0.1:8643/v1`, authenticated with the `API_SERVER_KEY` from
+`~/.hermes/profiles/mikronous/.env`. Hermes 0.21+ would otherwise fold every profile into one shared
+host gateway, but that host did not load this profile's plugin in testing (no desktop tools, no
+reminder delivery), so the profile stays standalone. Your default profile's gateway is untouched.
+`mik doctor` prints the live endpoint.
 
 ## What leaves your machine
 

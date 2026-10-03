@@ -89,3 +89,10 @@ platforms:
   mikronous:
     enabled: true
     gateway_restart_notification: false   # per-platform flag: no "Gateway online" popup on restarts
+
+# Run this profile's gateway as its own process (hermes-gateway-mikronous.service) instead of
+# inside the shared host gateway. Verified on Hermes 0.21.x: the multiplexed host never loaded
+# this profile's plugin (no mikronous tools, no hooks, no platform), while a per-profile process
+# does. Hermes calls this key a temporary compatibility shim; revisit when the gap is closed.
+gateway:
+  standalone: true
