@@ -13,24 +13,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-PROFILE = "mikronous"
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
-PROFILE_HOME = HERMES_HOME / "profiles" / PROFILE
-LLAMA_ENV = Path("~/.config/mikronous/llama.env").expanduser()
+from .paths import HERMES_HOME, LLAMA_ENV, PROFILE, PROFILE_HOME, gateway, read_env
+
 OK, WARN, FAIL = "ok", "warn", "FAIL"
-
-
-def _read_env(path: Path) -> dict[str, str]:
-    env: dict[str, str] = {}
-    if not path.exists():
-        return env
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        env[key.strip()] = value.split(" #", 1)[0].strip().strip('"').strip("'")
-    return env
+_read_env = read_env
 
 
 def _http_json(url: str, headers: dict[str, str] | None = None, timeout: float = 3.0):
@@ -95,18 +81,26 @@ def run_checks() -> list[tuple[str, str, str]]:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         rows.append((f"llama-server :{port}", FAIL, f"unreachable ({exc.__class__.__name__})"))
 
-    # 5. Hermes gateway / API server
-    penv = _read_env(PROFILE_HOME / ".env")
-    api_port = penv.get("API_SERVER_PORT", "8642")
-    key = penv.get("API_SERVER_KEY", "")
-    rows.append(("API_SERVER_KEY", OK if key and key != "replace-me" else FAIL, "set" if key else "missing in profile .env"))
-    state = _systemd_active(f"hermes-gateway-{PROFILE}.service")
-    rows.append((f"hermes-gateway-{PROFILE}.service", OK if state == "active" else WARN, state or "systemctl unavailable"))
+    # 5. Hermes gateway / API server (multiplexed host gateway or per-profile gateway)
+    gw = gateway()
+    rows.append(("API_SERVER_KEY", OK if gw.api_key and gw.api_key != "replace-me" else FAIL,
+                 "set" if gw.api_key else f"missing in {PROFILE_HOME / '.env'}"))
+    if gw.mode == "multiplex":
+        denv = _read_env(HERMES_HOME / ".env")
+        enabled = denv.get("API_SERVER_ENABLED", "").lower() == "true"
+        rows.append(("host API server enabled", OK if enabled else FAIL,
+                     "API_SERVER_ENABLED=true in ~/.hermes/.env" if enabled
+                     else "add API_SERVER_ENABLED=true (+KEY, PORT) to ~/.hermes/.env — re-run scripts/install.sh"))
+    state = _systemd_active(gw.service)
+    rows.append((f"{gw.service} ({gw.mode})", OK if state == "active" else WARN, state or "systemctl unavailable"))
     try:
-        _http_json(f"http://127.0.0.1:{api_port}/health", headers={"Authorization": f"Bearer {key}"})
-        rows.append((f"Hermes API server :{api_port}", OK, "healthy"))
+        data = _http_json(f"{gw.v1}/models", headers={"Authorization": f"Bearer {gw.api_key}"})
+        ids = [m.get("id") for m in data.get("data", [])]
+        rows.append(("Hermes API", OK, f"{gw.v1}  models: {', '.join(map(str, ids)) or 'none'}"))
+    except urllib.error.HTTPError as exc:
+        rows.append(("Hermes API", FAIL, f"{gw.v1} -> HTTP {exc.code} (wrong key or profile not served)"))
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        rows.append((f"Hermes API server :{api_port}", FAIL, f"unreachable ({exc.__class__.__name__})"))
+        rows.append(("Hermes API", FAIL, f"{gw.v1} unreachable ({exc.__class__.__name__})"))
 
     return rows
 

@@ -163,13 +163,51 @@ if [[ "$WITH_MODEL" == 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-step "Hermes gateway (API server + cron) as a user service"
-# Hermes asks "start now?" and "start on login?"; answer yes to both without a TTY.
-if printf 'y\ny\ny\n' | hp gateway install; then
-  printf 'y\ny\n' | hp gateway restart || printf 'y\ny\n' | hp gateway start || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
+step "Hermes gateway (API server + cron)"
+# Hermes >= 0.21 runs ONE host gateway (default profile) that serves every profile; the mikronous
+# API server is then mirrored at http://127.0.0.1:<default port>/p/mikronous/v1 and authenticated
+# with mikronous's own API_SERVER_KEY. Older Hermes runs one gateway per profile.
+DEFAULT_ENV="$HERMES_HOME/.env"; DEFAULT_CFG="$HERMES_HOME/config.yaml"
+gen_key() { openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+ensure_env_key() { # file key default
+  grep -q "^$2=" "$1" 2>/dev/null || { echo "$2=$3" >> "$1"; echo "set $2 in $1"; }
+}
+is_multiplexed() {
+  grep -qiE '^\s*standalone:\s*true' "$PROFILE_HOME/config.yaml" 2>/dev/null && return 1
+  grep -qiE '^\s*multiplex_profiles:\s*true' "$DEFAULT_CFG" 2>/dev/null && return 0
+  [[ -f "$UNIT_DIR/hermes-gateway.service" ]]
+}
+GATEWAY_MODE=""
+if is_multiplexed; then
+  GATEWAY_MODE=multiplex
 else
-  fail "gateway install failed; run: hermes -p $PROFILE gateway install"
+  printf 'y\ny\ny\n' | hp gateway install; rc=$?
+  if [[ $rc -eq 0 ]]; then GATEWAY_MODE=standalone
+  elif [[ $rc -eq 78 ]]; then GATEWAY_MODE=multiplex; echo "(per-profile gateways are retired; using the shared host gateway)"
+  else fail "gateway install failed (exit $rc); run: hermes -p $PROFILE gateway install"; fi
 fi
+case "$GATEWAY_MODE" in
+  multiplex)
+    touch "$DEFAULT_ENV"; chmod 600 "$DEFAULT_ENV"
+    ensure_env_key "$DEFAULT_ENV" API_SERVER_ENABLED true
+    ensure_env_key "$DEFAULT_ENV" API_SERVER_KEY "$(gen_key)"
+    ensure_env_key "$DEFAULT_ENV" API_SERVER_HOST 127.0.0.1
+    ensure_env_key "$DEFAULT_ENV" API_SERVER_PORT 8642
+    if [[ ! -f "$UNIT_DIR/hermes-gateway.service" ]]; then
+      printf 'y\ny\ny\n' | hermes gateway install || fail "host gateway install failed; run: hermes gateway install"
+    fi
+    printf 'y\ny\n' | hermes gateway restart || printf 'y\ny\n' | hermes gateway start || fail "host gateway did not start; see: hermes gateway status"
+    hp gateway restart >/dev/null 2>&1 || true   # make sure the host (re)serves this profile
+    API_PORT="$(grep ^API_SERVER_PORT= "$DEFAULT_ENV" | cut -d= -f2)"
+    API_URL="http://127.0.0.1:${API_PORT:-8642}/p/$PROFILE/v1"
+    ;;
+  standalone)
+    printf 'y\ny\n' | hp gateway restart || printf 'y\ny\n' | hp gateway start || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
+    API_PORT="$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2)"
+    API_URL="http://127.0.0.1:${API_PORT:-8642}/v1"
+    ;;
+  *) API_URL="(gateway not installed)" ;;
+esac
 
 # ---------------------------------------------------------------------------
 step "Done"
@@ -182,5 +220,5 @@ fi
 echo
 echo "Check everything:   mik doctor   (or: python3 -m mikronous_cli doctor)"
 echo "Talk to it now:     hermes -p $PROFILE chat   (or just: mikronous chat)"
-echo "API server:         http://127.0.0.1:$(grep ^API_SERVER_PORT= "$PROFILE_HOME/.env" | cut -d= -f2)/v1  (key in $PROFILE_HOME/.env)"
+echo "API server:         $API_URL  (Bearer key: API_SERVER_KEY in $PROFILE_HOME/.env)"
 (( ${#FAILURES[@]} == 0 ))
