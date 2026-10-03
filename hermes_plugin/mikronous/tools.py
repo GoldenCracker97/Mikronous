@@ -222,8 +222,21 @@ def _on_session_end(**_: Any) -> None:
 
 
 # ----------------------------------------------------------------------------- registration
+def _already_registered(ctx) -> set[str]:
+    """Tool names Hermes already holds for this plugin (pre-registered via provides_tools)."""
+    try:
+        return set(getattr(ctx._manager, "_plugin_tool_names", ()))  # noqa: SLF001
+    except Exception:  # noqa: BLE001
+        return set()
+
+
 def register_tools(ctx) -> None:
+    done = _already_registered(ctx)
+    if done >= set(HANDLERS):
+        return  # Hermes imported tools.py itself (deferred path); register() must not do it twice
     for name, handler in HANDLERS.items():
+        if name in done:
+            continue
         ctx.register_tool(name=name, toolset=TOOLSET, schema=SCHEMAS[name], handler=handler,
                           description=SCHEMAS[name]["description"], emoji=EMOJI[name])
     # Shipped skills are NOT registered here: plugin skills stay out of the system prompt's

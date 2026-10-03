@@ -1,10 +1,10 @@
 name: mikronous
 label: Mikronous Desktop
 kind: platform
-version: 0.1.0
+version: 0.3.1
 description: "KDE Plasma desktop integration for Hermes: notifications, app/URL launching, clipboard, local notes, local document search, and a delivery platform for reminders."
 author: GoldenCracker97
-# Client tools the agent can call from any session; Hermes imports tools.py eagerly for these.
+# Client tools the agent can call from any session (registered from __init__.register; see there).
 provides_tools:
   - desktop_notify
   - desktop_open
