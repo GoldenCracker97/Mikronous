@@ -63,12 +63,22 @@ def _split_title(text: str) -> tuple[str, str]:
 def _push_to_tray(payload: dict) -> bool:
     path = socket_path()
     if IS_WINDOWS:
-        try:
-            with open(str(path), "r+b", buffering=0) as pipe:
-                pipe.write((json.dumps(payload) + "\n").encode("utf-8"))
-            return True
-        except OSError:
-            return False   # tray not running: the inbox file and the toast still deliver
+        # Qt's QLocalServer pipe has no buffer: a write blocks until the tray reads it. Do it on a
+        # helper thread with a deadline so a stuck tray can never hang reminder delivery.
+        import threading
+        done = {"ok": False}
+
+        def _write() -> None:
+            try:
+                with open(str(path), "r+b", buffering=0) as pipe:
+                    pipe.write((json.dumps(payload) + "\n").encode("utf-8"))
+                done["ok"] = True
+            except OSError:
+                done["ok"] = False   # tray not running: the inbox file and the toast still deliver
+        t = threading.Thread(target=_write, daemon=True)
+        t.start()
+        t.join(2.0)
+        return done["ok"]
     if not path.exists():
         return False
     try:

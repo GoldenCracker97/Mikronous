@@ -117,8 +117,12 @@ def test_inbox_socket(app):
     ib.message.connect(got.append)
     line = (json.dumps({"ts": 1, "chat_id": "desktop", "text": "Stretch", "title": "Reminder"}) + "\n").encode()
     if sys.platform == "win32":
-        with open(local_server_path(INBOX_NAME), "r+b", buffering=0) as pipe:   # same path the plugin uses
-            pipe.write(line)
+        import threading
+
+        def _write():   # the pipe write blocks until the tray reads, so pump the loop while a thread writes
+            with open(local_server_path(INBOX_NAME), "r+b", buffering=0) as pipe:   # same path the plugin uses
+                pipe.write(line)
+        threading.Thread(target=_write, daemon=True).start()
     else:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(str(settings.socket_path()))
