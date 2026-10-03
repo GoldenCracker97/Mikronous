@@ -73,6 +73,7 @@ whichever applies.
 |---|---|
 | `mikronous chat` | Talk to the assistant in the terminal (Hermes profile command) |
 | `mikronous gateway status` | Gateway (API server + cron) state |
+| `mik ask "…"` | One question through the gateway with the full toolset (`--session <id>` to continue) |
 | `mik doctor` | One-screen health check of every piece |
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
@@ -94,7 +95,9 @@ whichever applies.
 **Reminders.** "Remind me in 20 minutes to …" or "every weekday at 9 …" creates a Hermes cron
 job delivered to the `mikronous` platform: a KDE notification, plus a line in
 `~/.local/share/mikronous/inbox.jsonl` (and the tray window once Phase 3 lands) so nothing is
-lost while you are away. `mikronous cron list` shows the jobs.
+lost while you are away. `mikronous cron list` shows the jobs. Reminders are created from chat
+sessions (the tray, `mikronous chat`, or `mik ask "…"`); Hermes hides the scheduling tool in
+`mikronous -z` one-shots by design.
 
 `mik docs status | reindex | search <q>` manages the document index from the terminal. PDFs and
 Office files are extracted with Hermes's own converter when indexed from inside a Hermes session.

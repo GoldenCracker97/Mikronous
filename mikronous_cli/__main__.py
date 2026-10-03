@@ -18,6 +18,9 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "model":  # hand everything after `model` to its own parser (keeps --help working)
         return _model(argv[1:])
+    if argv and argv[0] == "ask":
+        from . import ask
+        return ask.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")
     sub = parser.add_subparsers(dest="cmd")
 
@@ -26,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_model = sub.add_parser("model", help="fit the local model to this hardware (detect/list/recommend/use/tune/status/bench)")
     p_model.set_defaults(func=lambda a: _model([]))
+
+    p_ask = sub.add_parser("ask", help='ask one question through the gateway: mik ask "remind me in 10 minutes to ..."')
+    p_ask.set_defaults(func=lambda a: 0)
 
     p_priv = sub.add_parser("privacy", help="what can leave the machine: status | offline | online")
     p_priv.add_argument("action", nargs="?", default="status", choices=["status", "offline", "online"])
