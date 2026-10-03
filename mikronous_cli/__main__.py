@@ -21,6 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "ask":
         from . import ask
         return ask.main(argv[1:])
+    if argv and argv[0] == "tools":
+        from . import tools_cmd
+        return tools_cmd.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")
     sub = parser.add_subparsers(dest="cmd")
 
@@ -32,6 +35,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_ask = sub.add_parser("ask", help='ask one question through the gateway: mik ask "remind me in 10 minutes to ..."')
     p_ask.set_defaults(func=lambda a: 0)
+
+    p_tools = sub.add_parser("tools", help="toolsets the gateway exposes to the assistant (--json for raw)")
+    p_tools.set_defaults(func=lambda a: 0)
 
     p_priv = sub.add_parser("privacy", help="what can leave the machine: status | offline | online")
     p_priv.add_argument("action", nargs="?", default="status", choices=["status", "offline", "online"])

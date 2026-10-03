@@ -75,6 +75,7 @@ whichever applies.
 | `mikronous gateway status` | Gateway (API server + cron) state |
 | `mik ask "…"` | One question through the gateway with the full toolset (`--session <id>` to continue) |
 | `mik doctor` | One-screen health check of every piece |
+| `mik tools` | Toolsets the gateway exposes to the assistant |
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
 | `systemctl --user restart mikronous-llama` | Restart the model server after editing `~/.config/mikronous/llama.env` |

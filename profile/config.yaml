@@ -21,15 +21,15 @@ local_runtime:
   detect_ports: [8081]
 
 # ---------------------------------------------------------------------------
-# Full Hermes functionality. The API server (what the tray app talks to) gets
-# every toolset plus the mikronous desktop toolset from our plugin.
-# Tools that need API keys (image_gen, video, x_search) stay registered and
-# gate themselves at runtime.
+# Full Hermes functionality: each platform's own composite toolset plus the
+# mikronous desktop toolset from our plugin. (A "*" wildcard is ignored when a
+# plugin toolset is also listed, so name the composite explicitly.)
+# agent.disabled_toolsets below removes the paid-key toolsets afterwards.
 # ---------------------------------------------------------------------------
 platform_toolsets:
-  api_server: ["*", mikronous]
-  cli: ["*", mikronous]
-  cron: ["*", mikronous]
+  api_server: [hermes-api-server, mikronous]
+  cli: [hermes-cli, mikronous]
+  cron: [hermes-cron, mikronous]
 
 # ---------------------------------------------------------------------------
 # Internet: keyless. DuckDuckGo for search (no key); page extraction falls back
