@@ -1,19 +1,21 @@
-"""The chat window: transcript, streaming reply, tool activity, approval card, input box."""
+"""The chat window (the data-slate): transcript, streaming reply, rite chips, sanction card, input."""
 
 from __future__ import annotations
 
 import html
 import threading
 
+import os
+from pathlib import Path
+
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QKeyEvent, QKeySequence, QShortcut, QTextCursor
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QSizePolicy,
+from PySide6.QtGui import QIcon, QKeyEvent, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
                                QTextBrowser, QVBoxLayout, QWidget)
 
-from . import settings
+from . import settings, theme
 from .hermes_client import GatewayError, HermesClient, RunEvent
-
-APPROVAL_LABELS = {"once": "Allow once", "session": "Allow this session", "always": "Always allow", "deny": "Deny"}
+from .theme import APPROVAL_LABELS, CANT, TOKENS
 
 
 # ------------------------------------------------------------------------------------- worker
@@ -99,25 +101,29 @@ class ChatWindow(QWidget):
     def __init__(self, client: HermesClient):
         super().__init__()
         self.client = client
+        self.fonts = theme.load_fonts()
         self.state = settings.load()
         self.session_id = self.state.get("session_id") or ""
-        self.messages: list[dict] = []        # {"role": user|assistant|system|tool, "text": str}
+        self.messages: list[dict] = []        # {"role": user|assistant|system|tool|inbox|litany, "text": str}
         self._streaming: str | None = None    # assistant text being streamed
         self._thread: QThread | None = None
         self._worker: ChatWorker | None = None
         self._pending_approval: dict | None = None
+        self._litany_done = False
         self._render_timer = QTimer(self, interval=60, singleShot=True)
         self._render_timer.timeout.connect(self._render)
         self._stall_timer = QTimer(self, interval=90_000, singleShot=True)   # nothing arrived for 90 s
-        self._stall_timer.timeout.connect(lambda: self._set_status("still working… (Stop cancels this turn, Ctrl+N starts a clean chat)"))
+        self._stall_timer.timeout.connect(lambda: self._set_status(CANT["stall"]))
 
+        self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
+        self.setWindowIcon(QIcon(str(theme.icon_path("color"))))
         self.setWindowFlag(Qt.Dialog, True)   # keeps it out of the taskbar on most Plasma setups
         self.setFocusPolicy(Qt.StrongFocus)
         w = self.state.get("window", {})
         self.resize(int(w.get("width", 520)), int(w.get("height", 680)))
         self._build()
-        # Esc hides from anywhere in the window (the input box handles its own Esc too).
+        self.setStyleSheet(theme.stylesheet(self.fonts))
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.hide_window)
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.new_chat)
         if self.session_id:
@@ -128,57 +134,78 @@ class ChatWindow(QWidget):
     # ------------------------------------------------------------------ ui
     def _build(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        self.view = QTextBrowser()
+        header = QFrame(objectName="header")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(12, 7, 12, 7)
+        self.dot = QLabel()
+        self.dot.setFixedSize(10, 10)
+        hl.addWidget(self.dot)
+        hl.addSpacing(4)
+        hl.addWidget(QLabel("MIKRONOUS", objectName="title"))
+        hl.addStretch(1)
+        self.model_label = QLabel(_model_name(), objectName="model")
+        hl.addWidget(self.model_label)
+        root.addWidget(header)
+
+        inner = QVBoxLayout()
+        inner.setContentsMargins(10, 8, 10, 10)
+        inner.setSpacing(8)
+        root.addLayout(inner, 1)
+
+        self.view = QTextBrowser(objectName="view")
         self.view.setOpenExternalLinks(True)
         self.view.setFrameShape(QFrame.NoFrame)
-        root.addWidget(self.view, 1)
+        self.view.document().setDefaultStyleSheet(theme.transcript_css(self.fonts))
+        inner.addWidget(self.view, 1)
 
-        self.status = QLabel("")
-        self.status.setStyleSheet("color: palette(mid); font-size: 11px;")
-        root.addWidget(self.status)
+        self.status = QLabel("", objectName="status")
+        inner.addWidget(self.status)
 
-        self.approval_card = QFrame()
-        self.approval_card.setFrameShape(QFrame.StyledPanel)
-        self.approval_card.setStyleSheet("QFrame { border: 1px solid palette(highlight); border-radius: 6px; padding: 6px; }")
+        self.approval_card = QFrame(objectName="approval")
         card = QVBoxLayout(self.approval_card)
-        self.approval_text = QLabel("")
+        card.setContentsMargins(10, 8, 10, 8)
+        self.approval_text = QLabel("", objectName="approvalText")
         self.approval_text.setWordWrap(True)
         self.approval_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
         card.addWidget(self.approval_text)
         self.approval_buttons = QHBoxLayout()
         card.addLayout(self.approval_buttons)
         self.approval_card.hide()
-        root.addWidget(self.approval_card)
+        inner.addWidget(self.approval_card)
 
         row = QHBoxLayout()
-        self.input = InputBox()
-        self.input.setPlaceholderText("Ask Mikronous…  (Enter to send, Shift+Enter for a new line, Esc to hide)")
+        self.input = InputBox(objectName="input")
+        self.input.setPlaceholderText("> query the machine spirit_   (Enter transmits · Shift+Enter new line · Esc hides)")
         self.input.setFixedHeight(72)
         self.input.submit.connect(self.send)
         self.input.escape.connect(self.hide_window)
         row.addWidget(self.input, 1)
         col = QVBoxLayout()
-        self.send_btn = QPushButton("Send")
+        self.send_btn = QPushButton("TRANSMIT", objectName="send")
         self.send_btn.clicked.connect(self.send)
-        self.stop_btn = QPushButton("Stop")
+        self.stop_btn = QPushButton("CEASE", objectName="stop")
         self.stop_btn.clicked.connect(self.stop)
         self.stop_btn.setEnabled(False)
         col.addWidget(self.send_btn)
         col.addWidget(self.stop_btn)
         row.addLayout(col)
-        root.addLayout(row)
+        inner.addLayout(row)
+        self._set_dot("idle")
+
+    def _set_dot(self, state: str) -> None:
+        colour = {"idle": TOKENS["phosphor"], "thinking": TOKENS["brass"], "approval": TOKENS["red"]}.get(state, TOKENS["muted"])
+        self.dot.setStyleSheet(f"background: {colour}; border-radius: 5px;")
+        self.dot.setToolTip({"idle": "idle", "thinking": "cogitating", "approval": "awaiting sanction"}.get(state, state))
 
     # ------------------------------------------------------------------ transcript
     def _render(self) -> None:
-        parts: list[str] = []
-        for m in self.messages:
-            parts.append(_render_message(m))
+        parts = [_render_message(m) for m in self.messages]
         if self._streaming is not None:
             parts.append(_render_message({"role": "assistant", "text": self._streaming or "…"}))
-        self.view.setHtml("<style>p{margin:0 0 6px 0}</style>" + "".join(parts))
+        self.view.setHtml("".join(parts))
         self.view.moveCursor(QTextCursor.End)
 
     def _schedule_render(self) -> None:
@@ -193,7 +220,7 @@ class ChatWindow(QWidget):
         for m in self.client.session_messages(self.session_id):
             self.messages.append({"role": m["role"], "text": m["content"]})
         self._render()
-        self._set_status(f"session {self.session_id}")
+        self._set_status(CANT["session"])
 
     def new_chat(self) -> None:
         if self._worker:
@@ -204,11 +231,34 @@ class ChatWindow(QWidget):
         self.messages = []
         self._streaming = None
         self._render()
-        self._set_status("new chat")
+        self._set_status(CANT["new"])
 
     def show_inbox_message(self, payload: dict) -> None:
         title = payload.get("title") or "Mikronous"
-        self._add("inbox", f"**{title}**  \n{payload.get('text', '')}")
+        self._add("inbox", f"{title}\n{payload.get('text', '')}")
+
+    # ------------------------------------------------------------------ boot litany
+    def play_litany(self) -> None:
+        """Type out the awakening litany once per tray start (called by the app on first show)."""
+        if self._litany_done:
+            return
+        self._litany_done = True
+        lines = theme.litany_lines(_model_name(), "error" not in self.client.health())
+        if not theme.litany_enabled():
+            self._add("litany", "\n".join(lines))
+            return
+        self.messages.append({"role": "litany", "text": ""})
+        entry = self.messages[-1]
+        full = "\n".join(lines)
+        step = {"i": 0}
+
+        def tick() -> None:
+            step["i"] = min(len(full), step["i"] + 2)
+            entry["text"] = full[: step["i"]]
+            self._render()
+            if step["i"] < len(full):
+                QTimer.singleShot(18, tick)
+        tick()
 
     # ------------------------------------------------------------------ sending
     @Slot()
@@ -237,14 +287,15 @@ class ChatWindow(QWidget):
         self._thread.finished.connect(self._cleanup_worker)
         self.send_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self._set_status("thinking…")
+        self._set_dot("thinking")
+        self._set_status(CANT["thinking"])
         self._thread.start()
 
     @Slot()
     def stop(self) -> None:
         if self._worker:
             self._worker.request_stop()
-            self._set_status("stopping…")
+            self._set_status(CANT["stopping"])
 
     @Slot()
     def _cleanup_worker(self) -> None:
@@ -254,6 +305,7 @@ class ChatWindow(QWidget):
         self._worker = None
         self.send_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self._set_dot("idle")
         self.input.setFocus()
 
     # ------------------------------------------------------------------ events
@@ -270,31 +322,36 @@ class ChatWindow(QWidget):
 
     @Slot(str, str)
     def _on_tool_started(self, tool: str, preview: str) -> None:
-        self._set_status(f"{tool} …")
-        self._add("tool", f"{tool} {preview}".strip())
+        self._set_status(f"++ RITE: {tool.upper()} ++")
+        self._add("tool", f"RITE: {tool}" + (f" · {preview}" if preview else ""))
 
     @Slot(str, bool, str)
     def _on_tool_completed(self, tool: str, error: bool, preview: str) -> None:
-        self._set_status("thinking…")
+        self._set_status(CANT["thinking"])
         if error:
-            self._add("tool", f"{tool} failed: {preview[:200]}")
+            self._add("tool", f"RITE FAILED: {tool} · {preview[:200]}")
 
     @Slot(dict)
     def _on_approval(self, data: dict) -> None:
         self._pending_approval = data
         cmd = data.get("command") or data.get("tool_name") or "a tool call"
-        desc = data.get("description") or "The assistant wants to run something that needs your approval."
-        self.approval_text.setText(f"<b>Approve?</b> {html.escape(str(desc))}<br><code>{html.escape(str(cmd))}</code>")
+        desc = data.get("description") or "The machine spirit asks leave to run something that needs your sanction."
+        self.approval_text.setText(
+            f'<span style="font-family:\'{self.fonts["caps"]}\'; letter-spacing:2px; font-size:10px; color:{TOKENS["red"]};">SANCTION REQUIRED</span>'
+            f'<br>{html.escape(str(desc))}<br><code style="font-family:\'{self.fonts["mono"]}\'; color:{TOKENS["fg"]};">{html.escape(str(cmd))}</code>')
         while self.approval_buttons.count():
             item = self.approval_buttons.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         for choice in data.get("choices") or ["once", "deny"]:
-            b = QPushButton(APPROVAL_LABELS.get(choice, choice))
+            b = QPushButton(APPROVAL_LABELS.get(choice, choice).upper())
+            if choice == "once":
+                b.setObjectName("primary")
             b.clicked.connect(lambda _=False, c=choice: self._resolve_approval(c))
             self.approval_buttons.addWidget(b)
         self.approval_card.show()
-        self._set_status("waiting for your approval")
+        self._set_dot("approval")
+        self._set_status(CANT["approval"])
         self.show_window()
 
     def _resolve_approval(self, choice: str) -> None:
@@ -304,10 +361,11 @@ class ChatWindow(QWidget):
             return
         try:
             self.client.approve(self._worker.run_id, choice, data.get("request_id"))
-            self._add("tool", f"approval: {APPROVAL_LABELS.get(choice, choice)}")
-            self._set_status("thinking…")
+            self._add("tool", f"SANCTION: {APPROVAL_LABELS.get(choice, choice)}")
+            self._set_dot("thinking")
+            self._set_status(CANT["thinking"])
         except GatewayError as exc:
-            self._add("system", f"Could not send approval: {exc}")
+            self._add("system", f"Sanction could not be transmitted: {exc}")
 
     @Slot(str, str)
     def _on_finished(self, status: str, text: str) -> None:
@@ -318,23 +376,25 @@ class ChatWindow(QWidget):
             final = text.strip() or streamed
             if final:
                 self._add("assistant", final)
+            self._set_status(CANT["complete"])
         elif status == "cancelled":
             if streamed:
                 self._add("assistant", streamed)
-            self._add("system", "Stopped.")
+            self._add("system", CANT["interrupted"])
+            self._set_status("")
         else:
             if streamed:
                 self._add("assistant", streamed)
-            self._add("system", f"Error: {text.strip() or 'the run ended without a reply (see `mikronous gateway status`)'}")
+            self._add("system", f"++ MALFUNCTION ++ {text.strip() or 'the rite ended without an answer (see `mikronous gateway status`)'}")
+            self._set_status("")
         self._stall_timer.stop()
-        self._set_status("")
         self._render_timer.stop()
         self._render()                      # final state immediately, not on the next timer tick
 
     # ------------------------------------------------------------------ misc
     def _set_status(self, text: str) -> None:
         self.status.setText(text)
-        if self._worker is not None and text and "still working" not in text:
+        if self._worker is not None and text and text != CANT["stall"]:
             self._stall_timer.start()      # any progress resets the stall hint
         elif self._worker is None:
             self._stall_timer.stop()
@@ -361,17 +421,50 @@ class ChatWindow(QWidget):
         self.hide_window()
 
 
+def _model_name() -> str:
+    """Basename of the loaded GGUF, from the llama-server env file (no network)."""
+    try:
+        from mikronous_cli.paths import LLAMA_ENV, read_env
+        model = read_env(LLAMA_ENV).get("LLAMA_MODEL", "")
+        return Path(model).stem if model else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _cell(inner: str, *, bg: str, border: str, align: str = "left", indent_left: int = 0, indent_right: int = 0,
+          margin_top: int = 8) -> str:
+    """A framed block. Qt's rich text paints table-cell backgrounds and borders reliably; div backgrounds
+    only cover the first line."""
+    return (f'<table width="100%" cellspacing="0" cellpadding="0" style="margin-top:{margin_top}px;"><tr>'
+            + (f'<td width="{indent_left}"></td>' if indent_left else "")
+            + f'<td bgcolor="{bg}" style="border:1px solid {border}; padding:6px 10px;" align="{align}">{inner}</td>'
+            + (f'<td width="{indent_right}"></td>' if indent_right else "")
+            + "</tr></table>")
+
+
 def _render_message(m: dict) -> str:
     role, text = m.get("role"), m.get("text", "")
+    t = TOKENS
     if role == "user":
-        return f'<div style="margin:8px 0 4px 0;"><b>You</b></div><div style="margin-left:8px;">{_md(text)}</div>'
+        return _cell(_md(text), bg=t["user_bg"], border=t["red_line"], indent_left=56) \
+            .replace(f'border:1px solid {t["red_line"]};', f'border:1px solid {t["red_line"]}; border-right:3px solid {t["red"]};')
     if role == "assistant":
-        return f'<div style="margin:8px 0 4px 0;"><b>Mikronous</b></div><div style="margin-left:8px;">{_md(text)}</div>'
+        body = _md(text)
+        prompt = '<span class="prompt">&gt; </span>'
+        if "<p" in body:
+            i = body.index(">", body.index("<p")) + 1
+            body = body[:i] + prompt + body[i:]
+        else:
+            body = prompt + body
+        return f'<div class="ai">{body}</div>'
     if role == "inbox":
-        return f'<div style="margin:8px 0; padding:6px; border-left:3px solid palette(highlight);">{_md(text)}</div>'
+        title, _, body = text.partition("\n")
+        return _cell(f'<span class="label">{html.escape(title.upper())}</span><br>{_md(body)}', bg=t["bg2"], border=t["brass_dim"])
     if role == "tool":
-        return f'<div style="margin-left:8px; color:gray; font-size:11px;">⚙ {html.escape(text)}</div>'
-    return f'<div style="margin-left:8px; color:gray; font-style:italic;">{html.escape(text)}</div>'
+        return f'<div class="chip">++ {html.escape(text)} ++</div>'
+    if role == "litany":
+        return '<div class="litany">' + "<br>".join(html.escape(line) for line in text.split("\n")) + "</div>"
+    return f'<div class="system">{html.escape(text)}</div>'
 
 
 def _md(text: str) -> str:
@@ -380,7 +473,6 @@ def _md(text: str) -> str:
     doc = QTextDocument()
     doc.setMarkdown(text)
     body = doc.toHtml()
-    # keep only the body content so our wrapper styles apply
     start, end = body.find("<body"), body.rfind("</body>")
     if start != -1 and end != -1:
         body = body[body.find(">", start) + 1:end]

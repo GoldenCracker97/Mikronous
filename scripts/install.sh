@@ -55,16 +55,32 @@ mkdir -p "$PROFILE_HOME/.mikronous"
 SOUL_DST="$PROFILE_HOME/SOUL.md"; SOUL_SHA_FILE="$PROFILE_HOME/.mikronous/soul.sha"
 install_soul=0; reason=""
 if [[ ! -f "$SOUL_DST" || "$CREATED_NOW" == 1 ]]; then install_soul=1; reason="first install"
-elif cmp -s "$REPO_DIR/profile/SOUL.md" "$SOUL_DST"; then reason="up to date"
+elif [[ "${MIKRONOUS_FORCE_SOUL:-0}" != 1 && -f "$SOUL_SHA_FILE" && "$(cat "$SOUL_SHA_FILE")" == "$(sha "$SOUL_DST")" \
+        && "$(cat "$PROFILE_HOME/.mikronous/soul.src.sha" 2>/dev/null)" == "$(sha "$REPO_DIR/profile/SOUL.md")" ]]; then reason="up to date"
 elif head -c 60 "$SOUL_DST" | grep -q "^You are Hermes Agent"; then install_soul=1; reason="replacing Hermes starter"
 elif [[ -f "$SOUL_SHA_FILE" && "$(cat "$SOUL_SHA_FILE")" == "$(sha "$SOUL_DST")" ]]; then install_soul=1; reason="updating unmodified Mikronous version"
 elif [[ "${MIKRONOUS_FORCE_SOUL:-0}" == 1 ]]; then install_soul=1; reason="forced"
 else reason="edited locally; keeping it (MIKRONOUS_FORCE_SOUL=1 to overwrite)"
 fi
+# Voice level (plain | light | full): keep what the installed SOUL.md already uses, else MIKRONOUS_VOICE (default full).
+prev_voice="$(grep -A1 'voice:start' "$SOUL_DST" 2>/dev/null | grep -oiE 'voice: (plain|light|full)' | awk '{print tolower($2)}' | head -1)"
+VOICE="${prev_voice:-${MIKRONOUS_VOICE:-full}}"
+apply_voice() { # replaces the voice block in $SOUL_DST with profile/voices/$VOICE.md
+  python3 - "$SOUL_DST" "$REPO_DIR/profile/voices/$VOICE.md" <<'PY'
+import re, sys, pathlib
+soul, voice = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+text = soul.read_text(encoding="utf-8"); block = voice.read_text(encoding="utf-8").strip() + "\n"
+new = re.sub(r"<!-- voice:start -->\n.*?<!-- voice:end -->", lambda m: f"<!-- voice:start -->\n{block}<!-- voice:end -->", text, count=1, flags=re.DOTALL)
+soul.write_text(new, encoding="utf-8")
+PY
+}
 if [[ "$install_soul" == 1 ]]; then
   cp "$REPO_DIR/profile/SOUL.md" "$SOUL_DST"
+  apply_voice && reason="$reason, voice: $VOICE"
+  sha "$SOUL_DST" > "$SOUL_SHA_FILE"; sha "$REPO_DIR/profile/SOUL.md" > "$PROFILE_HOME/.mikronous/soul.src.sha"
+elif [[ -f "$SOUL_SHA_FILE" && "$(cat "$SOUL_SHA_FILE")" == "$(sha "$SOUL_DST")" ]]; then
+  reason="$reason (voice: $VOICE)"
 fi
-[[ -f "$SOUL_DST" ]] && cmp -s "$REPO_DIR/profile/SOUL.md" "$SOUL_DST" && sha "$SOUL_DST" > "$SOUL_SHA_FILE"
 echo "SOUL.md: $reason"
 
 # config.yaml: ours is the source of truth; keep a backup of anything that differs.
@@ -248,6 +264,7 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous.desktop" > "$APPS/mikronous.desktop"
       sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous-tray-autostart.desktop" > "$HOME/.config/autostart/mikronous-tray.desktop"
       cp "$REPO_DIR/packaging/mikronous.svg" "$ICONS/mikronous.svg"
+      cp "$REPO_DIR/packaging/mikronous-symbolic-light.svg" "$ICONS/mikronous-symbolic.svg"
       command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 >/dev/null 2>&1 || true
       command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
       echo "installed: $APPS/mikronous.desktop, autostart entry, icon"

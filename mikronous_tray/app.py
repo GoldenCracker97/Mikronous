@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -16,25 +16,15 @@ from .hermes_client import HermesClient
 from .inbox import InboxServer
 
 
-def _icon() -> QIcon:
-    icon = QIcon.fromTheme("mikronous")
-    if not icon.isNull():
-        return icon
-    pm = QPixmap(64, 64)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.setBrush(QColor("#3daee9"))
-    p.setPen(Qt.NoPen)
-    p.drawEllipse(2, 2, 60, 60)
-    p.setPen(QColor("white"))
-    f = QFont()
-    f.setBold(True)
-    f.setPixelSize(38)
-    p.setFont(f)
-    p.drawText(pm.rect(), Qt.AlignCenter, "M")
-    p.end()
-    return QIcon(pm)
+def _tray_icon() -> QIcon:
+    """Monochrome cog for the panel: light glyph on a dark panel, dark glyph on a light one."""
+    from . import theme
+    pal = QApplication.palette()
+    dark_panel = pal.window().color().lightness() < 128
+    icon = QIcon(str(theme.icon_path("symbolic-light" if dark_panel else "symbolic-dark")))
+    if icon.isNull():
+        icon = QIcon(str(theme.icon_path("color")))
+    return icon
 
 
 def send_control(command: str) -> bool:
@@ -58,6 +48,9 @@ class TrayApp(QObject):
         app.setDesktopFileName("mikronous")
         self.client = HermesClient()
         self.window = ChatWindow(self.client)
+        from . import theme
+        app.setWindowIcon(QIcon(str(theme.icon_path("color"))))
+        self._litany_pending = True
 
         self.control = QLocalServer(self)
         QLocalServer.removeServer(settings.CONTROL_SERVER)
@@ -69,7 +62,7 @@ class TrayApp(QObject):
             print("mikronous-tray: could not listen on", settings.socket_path(), file=sys.stderr)
         self.inbox.message.connect(self._inbox_message)
 
-        self.tray = QSystemTrayIcon(_icon(), self)
+        self.tray = QSystemTrayIcon(_tray_icon(), self)
         self.tray.setToolTip("Mikronous")
         menu = QMenu()
         self.act_toggle = QAction("Show / hide chat", menu)
@@ -91,6 +84,14 @@ class TrayApp(QObject):
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._activated)
         self.tray.show()
+        self._orig_show = self.window.show_window
+        self.window.show_window = self._show_with_litany  # first show after start plays the litany
+
+    def _show_with_litany(self) -> None:
+        self._orig_show()
+        if self._litany_pending:
+            self._litany_pending = False
+            self.window.play_litany()
 
     # ------------------------------------------------------------------ slots
     def _activated(self, reason) -> None:

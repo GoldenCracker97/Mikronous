@@ -17,7 +17,7 @@ Status: **all phases complete** and verified on a real Plasma 5.27 desktop with 
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`, `set_reminder`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
 | `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications (and in `~/.local/share/mikronous/inbox.jsonl`) | 2 ✓ |
-| Tray app (`mik tray`) | Hotkey (`Meta+Space`) chat window: streaming replies, tool activity, approval cards, reminders inbox | 3 ✓ |
+| Tray app (`mik tray`) | Hotkey (`Meta+Space`) data-slate: streaming replies, rites, sanction cards, reminders inbox, boot litany | 3 ✓ |
 
 ## Install (Linux, KDE Plasma)
 
@@ -59,6 +59,21 @@ host gateway, but that host did not load this profile's plugin in testing (no de
 reminder delivery), so the profile stays standalone. Your default profile's gateway is untouched.
 `mik doctor` prints the live endpoint.
 
+## The look: Adeptus Mechanicus
+
+The tray app is a data-slate: iron-black, brass fittings, your words in Martian red, the machine's
+answers in phosphor green. Dangerous commands ask for *sanction*, tool calls show as *rites*, and the
+first time the window opens after login it types out a short awakening litany with the loaded model's
+name (`MIKRONOUS_NO_LITANY=1` in the environment skips the animation). The icons are original
+cog-and-circuit designs made for this project, not the Games Workshop mark. Fonts (Cinzel, Share
+Tech Mono, Grenze Gotisch) ship with the app under the SIL Open Font License.
+
+The assistant speaks in character too. `mik voice` shows the level; `mik voice full|light|plain`
+changes it (full: tech-priest, with hard rules that keep answers short and facts plain; light: a
+phrase here and there; plain: no persona). The installer defaults to `full` and keeps whatever you
+chose on re-runs; `MIKRONOUS_VOICE=plain scripts/install.sh` sets a different default. In a chat,
+"speak plainly" also turns the voice off for that conversation.
+
 ## Try it
 
 1. `mik doctor` — every row `ok`.
@@ -93,6 +108,7 @@ reminder delivery), so the profile stays standalone. Your default profile's gate
 | `mik tools` | Toolsets the gateway exposes to the assistant |
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
+| `mik voice [plain\|light\|full]` | How much tech-priest the assistant speaks |
 | `systemctl --user restart mikronous-llama` | Restart the model server after editing `~/.config/mikronous/llama.env` |
 
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
@@ -180,7 +196,8 @@ profile/            Hermes profile template (SOUL.md, config.yaml, env.example)
 hermes_plugin/      The `mikronous` Hermes plugin (tools + delivery platform)
 mikronous_cli/      `mik` CLI (doctor, ask, tools, privacy, docs, model, tray, toggle)
 mikronous_model/    hardware-fit library used by `mik model`
-mikronous_tray/     PySide6 tray app: chat window, runs/SSE client, reminder inbox socket
+mikronous_tray/     PySide6 tray app: data-slate window, runs/SSE client, reminder inbox socket, theme + bundled fonts
+profile/voices/     Persona levels swapped into SOUL.md by `mik voice`
 packaging/          .desktop files (Meta+Space shortcut, autostart) and icon
 skills/             Skills shipped with Mikronous
 systemd/            User units + env template
