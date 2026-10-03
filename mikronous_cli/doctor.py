@@ -112,6 +112,18 @@ def run_checks() -> list[tuple[str, str, str]]:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         rows.append(("Hermes API", FAIL, f"{gw.v1} unreachable ({exc.__class__.__name__})"))
 
+    # 5b. Home Assistant (optional; Hermes's built-in tools activate when HASS_TOKEN is set)
+    penv = _read_env(PROFILE_HOME / ".env")
+    if penv.get("HASS_TOKEN"):
+        hass = (penv.get("HASS_URL") or "http://homeassistant.local:8123").rstrip("/")
+        try:
+            _http_json(f"{hass}/api/", headers={"Authorization": f"Bearer {penv['HASS_TOKEN']}"}, timeout=4)
+            rows.append(("home assistant", OK, f"{hass} answers with your token"))
+        except urllib.error.HTTPError as exc:
+            rows.append(("home assistant", FAIL, f"{hass} -> HTTP {exc.code} (token rejected?)"))
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            rows.append(("home assistant", WARN, f"{hass} unreachable ({exc.__class__.__name__})"))
+
     # 6. Local-only: nothing in this profile can reach a paid provider
     try:
         from . import privacy

@@ -69,6 +69,21 @@ host gateway, but that host did not load this profile's plugin in testing (no de
 reminder delivery), so the profile stays standalone. Your default profile's gateway is untouched.
 `mik doctor` prints the live endpoint.
 
+## Network and APIs
+
+| Ability | How | What leaves the machine |
+|---|---|---|
+| Devices on the LAN, is a host up, wake a PC | `lan_devices`, `host_check`, `wake_on_lan` | Pings and ARP on your own subnet only |
+| Any HTTP/JSON API | `http_request` with `auth_env: NAME`; keys live in the profile `.env` under names you choose (e.g. `GITHUB_TOKEN=`) and are injected as headers, never shown to the model | Only the requests you ask for, to the host you name |
+| Home Assistant | Hermes's built-in tools, on once `HASS_URL` and `HASS_TOKEN` are in the profile `.env`; `mik doctor` shows a row | Calls to your own Home Assistant |
+| Commands on other machines | `terminal` + `ssh` with your own `~/.ssh/config` aliases and keys | SSH to hosts you name |
+| Learning new procedures | The assistant offers to save a procedure as a skill (`skill_manage`) and only does so on a yes | Nothing; skills are local files |
+
+Writes (POST/PUT/PATCH/DELETE) and commands on other machines require your confirmation first. `mik privacy
+status` lists provider keys (which would move inference off the machine, and are not allowed) separately from
+service keys you added for these integrations. Five skills ship with this: `lan`, `remote-command`,
+`home-assistant`, `api-calls`, `skill-authoring`.
+
 ## The look: Machine Cult
 
 The tray app is a data-slate: iron-black, brass fittings, your words in Martian red, the machine's
@@ -183,6 +198,8 @@ in System Settings → Shortcuts → Mikronous.
 | `desktop_notify` | KDE notification via D-Bus (`notify-send` fallback) | |
 | `desktop_open` | Open a URL, a file, or launch an installed app by name (`firefox`, `dolphin`) | `.desktop` files in the usual XDG dirs |
 | `clipboard` | Read / set the clipboard (Klipper via `qdbus6`, `wl-paste`/`xclip` fallback) | |
+| `lan_devices` / `host_check` / `wake_on_lan` | Local-network tools (see Network and APIs) | |
+| `http_request` | Any HTTP/JSON API, keys by name from the profile `.env` | |
 | `set_reminder` | "Remind me in 20 minutes to…": schedules a Hermes cron job in no-agent mode whose output is delivered as a desktop notification; `list` / `cancel` too | jobs in `mikronous cron list`; scripts in the profile's `scripts/` |
 | `notes_manage` | Durable notes and to-dos: add, list, search, done, update, delete; also `/notes` in chat | `~/Mikronous/notes/*.md` (one file per note, plain markdown you can edit) |
 | `docs_search` | Full-text search over your document folders, then the agent reads the hit with `read_file` | index in `~/.local/share/mikronous/docs.sqlite`; folders from `MIKRONOUS_DOCS_DIRS` (default `~/Documents`) |

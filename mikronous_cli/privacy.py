@@ -31,15 +31,23 @@ def save_config(cfg: dict) -> None:
     CONFIG.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
+PROVIDER_KEY_PREFIXES = ("OPENAI", "ANTHROPIC", "OPENROUTER", "GOOGLE", "GEMINI", "MISTRAL", "GROQ", "XAI", "DEEPSEEK",
+                         "TOGETHER", "FIREWORKS", "NOUS", "COHERE", "PERPLEXITY", "AZURE", "AWS", "BEDROCK")
+
+
 def secret_names(env: dict[str, str]) -> list[str]:
-    """Env names that look like provider credentials (API_SERVER_KEY is ours and local)."""
-    out = []
-    for k, v in env.items():
-        if not v or k == "API_SERVER_KEY":
-            continue
-        if k.endswith(("_API_KEY", "_TOKEN", "_SECRET")) or k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "HF_TOKEN"):
-            out.append(k)
-    return sorted(out)
+    """Env names that look like *model provider* credentials (would move inference off the machine)."""
+    return sorted(k for k, v in env.items() if v and k != "API_SERVER_KEY" and _is_provider_key(k))
+
+
+def service_key_names(env: dict[str, str]) -> list[str]:
+    """User-added keys for services (Home Assistant, GitHub, ...): only sent to the host named in a request."""
+    return sorted(k for k, v in env.items() if v and k != "API_SERVER_KEY"
+                  and k.endswith(("_API_KEY", "_TOKEN", "_SECRET", "_KEY")) and not _is_provider_key(k))
+
+
+def _is_provider_key(k: str) -> bool:
+    return k.startswith(PROVIDER_KEY_PREFIXES) or k in ("HF_TOKEN",)
 
 
 def assess(cfg: dict, env: dict[str, str]) -> list[tuple[str, str, str]]:
@@ -58,7 +66,10 @@ def assess(cfg: dict, env: dict[str, str]) -> list[tuple[str, str, str]]:
     rows.append(("auxiliary tasks", OK if not overridden else WARN, "all on the local model" if not overridden else f"overridden: {overridden}"))
 
     keys = secret_names(env)
-    rows.append(("provider keys in profile .env", OK if not keys else WARN, "none" if not keys else ", ".join(keys)))
+    rows.append(("provider keys in profile .env", OK if not keys else FAIL, "none" if not keys else ", ".join(keys)))
+    skeys = service_key_names(env)
+    rows.append(("service keys in profile .env", OK, "none" if not skeys
+                 else f"{', '.join(skeys)} (yours; sent only to the host you name in a request, never shown to the model)"))
     dkeys = secret_names(read_env(HERMES_HOME / ".env"))
     rows.append(("provider keys in default .env", OK if not dkeys else WARN,
                  "none" if not dkeys else f"{', '.join(dkeys)} (default profile only; mikronous never selects them)"))

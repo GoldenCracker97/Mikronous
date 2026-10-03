@@ -12,6 +12,10 @@ provides_tools:
   - notes_manage
   - docs_search
   - set_reminder
+  - lan_devices
+  - host_check
+  - wake_on_lan
+  - http_request
 provides_hooks:
   - pre_tool_call
   - on_session_end

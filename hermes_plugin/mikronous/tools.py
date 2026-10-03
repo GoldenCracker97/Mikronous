@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import desktop, docs_index, notes, reminders
+from . import desktop, docs_index, network, notes, reminders
 
 logger = logging.getLogger(__name__)
 TOOLSET = "mikronous"
@@ -170,6 +170,42 @@ SCHEMAS = {
          "message": {"type": "string", "description": "REQUIRED for create. What to show the user, in their words (e.g. 'Stretch', 'Call the dentist')"},
          "id": {"type": "string", "description": "reminder id for cancel (from list)"}},
         []),
+    "lan_devices": _schema(
+        "lan_devices",
+        "List devices on the local network (IP, MAC, name when known). Use when the user asks what is on the "
+        "network, whether a device is connected, or wants an IP for a device name. scan=true pings the whole "
+        "subnet first for a fresh list (a few seconds).",
+        {"scan": {"type": "boolean", "description": "ping-sweep the local subnet first (default false)"}}, []),
+    "host_check": _schema(
+        "host_check",
+        "Is a host up? Ping plus optional TCP port checks (router, NAS, printer, server, any IP or name).",
+        {"host": {"type": "string", "description": "hostname or IP"},
+         "ports": {"type": "array", "items": {"type": "integer"}, "description": "TCP ports to test, e.g. [22, 80, 443]"}},
+        ["host"]),
+    "wake_on_lan": _schema(
+        "wake_on_lan",
+        "Wake a sleeping machine on the LAN by sending a Wake-on-LAN magic packet to its MAC address. "
+        "If you do not know the MAC, look in the user's notes or ask; lan_devices shows MACs of devices that are awake.",
+        {"mac": {"type": "string", "description": "MAC address like aa:bb:cc:dd:ee:ff"},
+         "broadcast": {"type": "string", "description": "broadcast address (default 255.255.255.255)"}},
+        ["mac"]),
+    "http_request": _schema(
+        "http_request",
+        "Call any HTTP/JSON API the user names (REST endpoints, self-hosted services, public APIs). "
+        "Authenticate with auth_env=NAME, the name of a key the user stored in the profile .env (e.g. GITHUB_TOKEN); "
+        "the value is injected as a header and never shown to you. GET/HEAD run directly; other methods need "
+        "confirm=true after the user agreed. Prefer this over the browser for anything that returns JSON.",
+        {"method": {"type": "string", "enum": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]},
+         "url": {"type": "string"},
+         "headers": {"type": "object", "description": "extra request headers"},
+         "json": {"description": "JSON body (object or array)"},
+         "body": {"type": "string", "description": "raw body when not JSON"},
+         "auth_env": {"type": "string", "description": "name of the .env variable holding the token/key"},
+         "auth_header": {"type": "string", "description": "header to put it in (default Authorization)"},
+         "auth_scheme": {"type": "string", "description": "prefix before the value (default Bearer; use '' for none, 'token' for GitHub classic)"},
+         "confirm": {"type": "boolean", "description": "required true for POST/PUT/PATCH/DELETE after the user confirmed"},
+         "timeout": {"type": "number"}, "char_limit": {"type": "integer", "description": "max response chars (default 20000)"}},
+        ["url"]),
     "docs_search": _schema(
         "docs_search",
         "Full-text search over the user's own document folders (Documents by default; markdown, text, code, PDF, Word, spreadsheets). Returns file paths with snippets. Always follow up with read_file on the best hit before answering.",
@@ -180,9 +216,11 @@ SCHEMAS = {
 }
 
 HANDLERS = {"desktop_notify": desktop_notify, "desktop_open": desktop_open, "clipboard": clipboard,
-            "notes_manage": notes_manage, "docs_search": docs_search, "set_reminder": reminders.set_reminder}
+            "notes_manage": notes_manage, "docs_search": docs_search, "set_reminder": reminders.set_reminder,
+            "lan_devices": network.lan_devices, "host_check": network.host_check, "wake_on_lan": network.wake_on_lan,
+            "http_request": network.http_request}
 EMOJI = {"desktop_notify": "🔔", "desktop_open": "🚀", "clipboard": "📋", "notes_manage": "📝", "docs_search": "📚",
-         "set_reminder": "⏰"}
+         "set_reminder": "⏰", "lan_devices": "🖧", "host_check": "📡", "wake_on_lan": "⚡", "http_request": "🌐"}
 
 
 # ----------------------------------------------------------------------------- slash command + hook

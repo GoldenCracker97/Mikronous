@@ -3,6 +3,18 @@
 All notable changes to Mikronous are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Network tools**: `lan_devices` (ARP/neighbour table with optional ping sweep and DNS/mDNS names),
+  `host_check` (ping + TCP ports), `wake_on_lan` (magic packet); Linux and Windows.
+- **`http_request`**: generic HTTP/JSON client for any API; keys referenced by name from the profile `.env`
+  (`auth_env`), injected as a header and redacted from results; writes require `confirm: true`.
+- **Skills**: `lan`, `remote-command` (SSH through the terminal with the user's keys), `home-assistant`
+  (Hermes's built-in tools once `HASS_URL`/`HASS_TOKEN` are set), `api-calls`, `skill-authoring` (offer to save
+  taught procedures with `skill_manage`).
+- `mik doctor`: Home Assistant row when configured. `mik privacy`: service keys listed separately from provider keys.
+
 ## [0.1.1] - 2026-10-03
 
 Fixes and additions from the first days of real use, plus native Windows support.
