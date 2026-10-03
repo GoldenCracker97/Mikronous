@@ -250,7 +250,22 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       cp "$REPO_DIR/packaging/mikronous.svg" "$ICONS/mikronous.svg"
       command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 >/dev/null 2>&1 || true
       command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
-      echo "installed: $APPS/mikronous.desktop (Meta+Space), autostart entry, icon"
+      echo "installed: $APPS/mikronous.desktop, autostart entry, icon"
+      # Plasma only activates a .desktop file's X-KDE-Shortcuts once it is in kglobalshortcutsrc.
+      HOTKEY="${MIKRONOUS_HOTKEY:-Meta+Space}"
+      if command -v kwriteconfig6 >/dev/null 2>&1; then KW=kwriteconfig6
+      elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; else KW=""; fi
+      if [[ -n "$KW" ]]; then
+        if ! grep -q "^_launch=$HOTKEY" <(sed -n '/^\[services\]\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null); then
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
+          systemctl --user restart plasma-kglobalaccel.service 2>/dev/null \
+            || { command -v kquitapp6 >/dev/null 2>&1 && kquitapp6 kglobalaccel >/dev/null 2>&1; } \
+            || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 kglobalaccel5 >/dev/null 2>&1; } || true
+        fi
+        echo "shortcut: $HOTKEY opens the chat window (change in System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY=...)"
+      else
+        echo "note: kwriteconfig not found; assign the shortcut in System Settings > Shortcuts > Add > Mikronous"
+      fi
       if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
         "$MIK" show >/dev/null 2>&1 && echo "tray started (look for the blue M in the system tray)" \
           || fail "tray did not start; run: mik tray   (in a terminal) to see the error"
@@ -276,7 +291,6 @@ fi
 echo
 echo "Check everything:   mik doctor   (or: python3 -m mikronous_cli doctor)"
 echo "Talk to it now:     hermes -p $PROFILE chat   (or just: mikronous chat)"
-[[ "$WITH_TRAY" == 1 ]] && echo "Desktop:            Meta+Space toggles the chat window (or: mik toggle). If the shortcut is not"
-[[ "$WITH_TRAY" == 1 ]] && echo "                    active yet: System Settings > Shortcuts > add 'Mikronous', or log out and in."
+[[ "$WITH_TRAY" == 1 ]] && echo "Desktop:            ${MIKRONOUS_HOTKEY:-Meta+Space} (Meta = the Windows key) toggles the chat window; so does mik toggle."
 echo "API server:         $API_URL  (Bearer key: API_SERVER_KEY in $PROFILE_HOME/.env)"
 (( ${#FAILURES[@]} == 0 ))

@@ -100,9 +100,10 @@ The window talks to the same gateway as `mik ask`: `POST /v1/runs` plus the run'
 stream, with one Hermes session per chat (`New chat` in the tray menu starts another; the current
 one survives restarts via `~/.config/mikronous/tray.json` and is reloaded from the gateway).
 
-If `Meta+Space` does nothing after the install, the shortcut from
-`~/.local/share/applications/mikronous.desktop` has not been picked up yet: log out and in, or add
-it in System Settings → Shortcuts → Add → Mikronous.
+Meta is the Windows key. The installer registers the shortcut in `~/.config/kglobalshortcutsrc`
+(Plasma ignores a `.desktop` file's `X-KDE-Shortcuts` until it is there) and restarts the shortcut
+daemon; set `MIKRONOUS_HOTKEY=Meta+M` before running `install.sh` for a different key, or change it
+in System Settings → Shortcuts → Mikronous.
 
 ## Desktop tools the agent gets
 
