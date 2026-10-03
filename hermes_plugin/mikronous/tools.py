@@ -166,8 +166,8 @@ SCHEMAS = {
         "Fires as a desktop notification at the given time with no further action from you. "
         "Never emulate reminders with the terminal (sleep) — use this.",
         {"action": {"type": "string", "enum": ["create", "list", "cancel"], "description": "default create"},
-         "when": {"type": "string", "description": "e.g. 'in 20 minutes', 'in 2 hours', 'at 15:30', 'tomorrow at 9am', 'friday at 10', 'every weekday at 9am', 'every 30 minutes'"},
-         "message": {"type": "string", "description": "What to show the user, in their words (e.g. 'Stretch', 'Call the dentist')"},
+         "when": {"type": "string", "description": "REQUIRED for create. e.g. 'in 20 minutes', 'in 2 hours', 'at 15:30', 'tomorrow at 9am', 'friday at 10', 'every weekday at 9am', 'every 30 minutes'"},
+         "message": {"type": "string", "description": "REQUIRED for create. What to show the user, in their words (e.g. 'Stretch', 'Call the dentist')"},
          "id": {"type": "string", "description": "reminder id for cancel (from list)"}},
         []),
     "docs_search": _schema(

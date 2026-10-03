@@ -47,6 +47,40 @@ def _parse_clock(text: str) -> tuple[int, int] | None:
     return h, mi
 
 
+_WHEN_ALIASES = ("when", "time", "at", "in", "schedule", "delay", "after", "datetime", "due")
+_MESSAGE_ALIASES = ("message", "text", "reminder", "title", "body", "task", "note", "content")
+_EMBEDDED_WHEN = re.compile(
+    r"\b(in\s+(?:\d+(?:\.\d+)?|an?|one)\s*(?:" + "|".join(sorted(_UNITS, key=len, reverse=True)) + r")"
+    r"|(?:every\s+\S+(?:\s+at\s+\S+)?)"
+    r"|(?:(?:today|tomorrow|tonight|" + "|".join(_WEEKDAYS) + r")\s+)?at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b",
+    re.IGNORECASE)
+_REMIND_PREFIX = re.compile(r"^(?:please\s+)?(?:remind\s+me\s+)?(?:to\s+)?", re.IGNORECASE)
+
+
+def extract_when_and_message(args: dict) -> tuple[str, str]:
+    """Tolerate small models: accept alias field names and, when ``when`` is missing, pull the time
+    phrase out of the message ("Remind me in 1 minute to blink" -> when="in 1 minute", message="blink")."""
+    def first(keys):
+        for k in keys:
+            v = args.get(k)
+            if isinstance(v, (int, float)) and k in ("in", "delay", "after"):
+                return f"in {v} minutes"
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return ""
+    message = " ".join(first(_MESSAGE_ALIASES).split())
+    when = first(_WHEN_ALIASES)
+    if not when and message:
+        m = _EMBEDDED_WHEN.search(message)
+        if m:
+            when = m.group(0)
+            message = " ".join((message[:m.start()] + " " + message[m.end():]).split())
+    if message:
+        message = _REMIND_PREFIX.sub("", message, count=1).strip(" ,.-") or message
+        message = re.sub(r"^(?:to\s+)", "", message).strip() or message
+    return message, when
+
+
 def normalize_when(text: str, now: datetime | None = None) -> str:
     """Turn everyday phrasing into Hermes's schedule grammar.
 
@@ -162,12 +196,13 @@ def set_reminder(args: dict, **_: Any) -> dict:
         if action != "create":
             return {"error": "action must be create, list or cancel"}
 
-        message = " ".join(str(args.get("message") or "").split())
-        when = str(args.get("when") or "").strip()
-        if not message:
-            return {"error": "message is required (what to remind the user of)"}
+        message, when = extract_when_and_message(args)
+        if not message and not when:
+            return {"error": "message is required (what to remind the user of) and when, e.g. 'in 20 minutes'"}
         if not when:
             return {"error": "when is required, e.g. 'in 20 minutes', 'at 15:30', 'tomorrow at 9am', 'every weekday at 9am'"}
+        if not message:
+            return {"error": "message is required (what to remind the user of)"}
         schedule = normalize_when(when)
         script = _write_script(message)
         res = _cronjob(action="create", schedule=schedule, name=f"Reminder: {message[:60]}", script=script,
