@@ -185,6 +185,13 @@ checks GitHub and, when there are new commits, offers to pull, re-install and re
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
 
+**Voice, fully local.** Install with `scripts/install.sh --voice` (Windows: `-VoiceInput`). Hold **VOX**
+in the window and speak; release and the words land in the input box, ready to edit or send. Or tap
+`Meta+Shift+V` (`Ctrl+Alt+V` on Windows) anywhere to start, and again to stop. Transcription is
+faster-whisper on your GPU or CPU (choose the model size in Settings; the weights download once from
+Hugging Face, no account). *Voice output* in Settings reads replies aloud with Piper (one voice file,
+downloaded once). Nothing is sent anywhere.
+
 **KRunner.** Press `Alt+Space`, type `mik what time is it in Tokyo`, Enter. The question runs in a
 fresh chat; when the window is hidden the answer comes as a notification (click it to open the slate).
 `mik settings`, `mik routines`, `mik chats`, `mik new` and `mik update` work there too. The tray serves

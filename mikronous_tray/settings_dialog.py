@@ -11,7 +11,7 @@ from . import prefs as P
 
 class SettingsDialog(QDialog):
     def __init__(self, parent: QWidget | None, current: P.Prefs, *, model: str = "", kde_shortcut: str = "",
-                 kde_shortcut_selection: str = "", client=None):
+                 kde_shortcut_selection: str = "", kde_shortcut_vox: str = "", client=None):
         super().__init__(parent, objectName="settings")
         self.setWindowTitle("Mikronous settings")
         self.setModal(True)
@@ -71,6 +71,27 @@ class SettingsDialog(QDialog):
         form.addRow("", _hint("Folders the file search indexes, comma-separated. Applies after the gateway restarts."))
 
         form.addRow(_rule())
+        from . import voice_io
+        self.stt_model = QComboBox()
+        for size in voice_io.STT_MODELS:
+            self.stt_model.addItem({"tiny": "tiny — fastest, rough", "base": "base — quick, fine for commands",
+                                    "small": "small — better accuracy", "turbo": "turbo — best, needs a GPU"}[size], size)
+        self.stt_model.setCurrentIndex(voice_io.STT_MODELS.index(current.stt_model) if current.stt_model in voice_io.STT_MODELS else 1)
+        form.addRow("Voice input", self.stt_model)
+        stt_ok, stt_msg = voice_io.stt_available()
+        form.addRow("", _hint(("Hold VOX (or tap the voice key) and speak; the model downloads once on first use (~150 MB for base). "
+                               if stt_ok else "Not available: " + stt_msg + ". ") + "Everything runs on this machine."))
+        self.tts = QCheckBox("read replies aloud (Piper, local)")
+        self.tts.setChecked(current.tts)
+        form.addRow("Voice output", self.tts)
+        self.tts_voice = QLineEdit(current.tts_voice)
+        self.tts_voice.setPlaceholderText(voice_io.DEFAULT_TTS_VOICE)
+        form.addRow("Piper voice", self.tts_voice)
+        tts_ok, tts_msg = voice_io.tts_available()
+        form.addRow("", _hint("Voice names as on the Piper voices list, e.g. en_US-lessac-medium, en_GB-alba-medium; downloaded once (~60 MB)."
+                              if tts_ok else "Not available: " + tts_msg + "."))
+
+        form.addRow(_rule())
         if P.hotkey_editable():
             self.hotkey = QLineEdit(current.hotkey)
             self.hotkey.setPlaceholderText("Ctrl+Alt+Space")
@@ -78,11 +99,16 @@ class SettingsDialog(QDialog):
             self.hotkey_selection = QLineEdit(current.hotkey_selection)
             self.hotkey_selection.setPlaceholderText("Ctrl+Alt+Shift+Space")
             form.addRow("Selection key", self.hotkey_selection)
+            self.hotkey_vox = QLineEdit(current.hotkey_vox)
+            self.hotkey_vox.setPlaceholderText("Ctrl+Alt+V")
+            form.addRow("Voice key", self.hotkey_vox)
         else:
             self.hotkey = None
             self.hotkey_selection = None
+            self.hotkey_vox = None
             form.addRow("Hotkey", QLabel(kde_shortcut or "not set"))
             form.addRow("Selection key", QLabel(kde_shortcut_selection or "not set"))
+            form.addRow("Voice key", QLabel(kde_shortcut_vox or "not set"))
             form.addRow("", _hint("Change them in System Settings → Shortcuts → Mikronous (or re-run the installer with "
                                   "MIKRONOUS_HOTKEY / MIKRONOUS_HOTKEY_SELECTION)."))
         self.translate_lang = QLineEdit(current.translate_lang)
@@ -123,6 +149,10 @@ class SettingsDialog(QDialog):
             hotkey_selection=(self.hotkey_selection.text().strip() if self.hotkey_selection is not None
                               else self._initial.hotkey_selection) or self._initial.hotkey_selection,
             translate_lang=self.translate_lang.text().strip() or self._initial.translate_lang,
+            hotkey_vox=(self.hotkey_vox.text().strip() if self.hotkey_vox is not None else self._initial.hotkey_vox) or self._initial.hotkey_vox,
+            stt_model=self.stt_model.currentData(),
+            tts=self.tts.isChecked(),
+            tts_voice=self.tts_voice.text().strip() or self._initial.tts_voice,
         )
 
 

@@ -41,6 +41,10 @@ class Prefs:
     hotkey: str = "Ctrl+Alt+Space"
     hotkey_selection: str = "Ctrl+Alt+Shift+Space"
     translate_lang: str = "English"
+    hotkey_vox: str = "Ctrl+Alt+V"
+    stt_model: str = "base"
+    tts: bool = False
+    tts_voice: str = "en_US-lessac-medium"
 
     def changed_from(self, other: "Prefs") -> list[str]:
         return [f.name for f in fields(self) if getattr(self, f.name) != getattr(other, f.name)]
@@ -64,6 +68,10 @@ def read() -> Prefs:
     p.hotkey = str(st.get("hotkey") or Prefs.hotkey)
     p.hotkey_selection = str(st.get("hotkey_selection") or Prefs.hotkey_selection)
     p.translate_lang = str(st.get("translate_lang") or Prefs.translate_lang)
+    p.hotkey_vox = str(st.get("hotkey_vox") or Prefs.hotkey_vox)
+    p.stt_model = str(st.get("stt_model") or Prefs.stt_model)
+    p.tts = bool(st.get("tts", False))
+    p.tts_voice = str(st.get("tts_voice") or Prefs.tts_voice)
     return p
 
 
@@ -115,8 +123,8 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
         privacy.save_config(cfg)
     if "docs_dirs" in changed:
         _write_env_var(PROFILE_ENV, "MIKRONOUS_DOCS_DIRS", new.docs_dirs.strip())
-    tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang")
-                    if k in changed}
+    tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang",
+                                                 "hotkey_vox", "stt_model", "tts", "tts_voice") if k in changed}
     if tray_changes:
         settings.save(**tray_changes)
     return changed

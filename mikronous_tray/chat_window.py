@@ -159,6 +159,10 @@ class ChatWindow(QWidget):
         self._update_state = "idle"
         self._copy_next_answer = False
         self._quiet_question: str | None = None
+        self._recorder = None
+        self._stt_thread: QThread | None = None
+        self._speaker = None
+        self._tts_thread: threading.Thread | None = None
 
         self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
@@ -265,8 +269,13 @@ class ChatWindow(QWidget):
         self.stop_btn = QPushButton("CEASE", objectName="stop")
         self.stop_btn.clicked.connect(self.stop)
         self.stop_btn.setEnabled(False)
+        self.vox_btn = QPushButton("VOX", objectName="stop")
+        self.vox_btn.setToolTip("Hold to speak; release to transcribe (or tap the voice key)")
+        self.vox_btn.pressed.connect(self.vox_start)
+        self.vox_btn.released.connect(self.vox_stop)
         col.addWidget(self.send_btn)
         col.addWidget(self.stop_btn)
+        col.addWidget(self.vox_btn)
         row.addLayout(col)
         inner.addLayout(row)
         self._set_dot("idle")
@@ -346,7 +355,8 @@ class ChatWindow(QWidget):
             return                                   # a previous save is still restarting the gateway
         old = prefs.read()
         dlg = SettingsDialog(self, old, model=_model_name(), kde_shortcut=prefs.kde_shortcut(),
-                             kde_shortcut_selection=prefs.kde_shortcut("selection"), client=self.client)
+                             kde_shortcut_selection=prefs.kde_shortcut("selection"), kde_shortcut_vox=prefs.kde_shortcut("vox"),
+                             client=self.client)
         if tab == "routines" and dlg.routines is not None:
             dlg.tabs.setCurrentIndex(1)
         dlg.setStyleSheet(self.styleSheet())
@@ -361,7 +371,7 @@ class ChatWindow(QWidget):
             return
         if not changed:
             return
-        if "hotkey" in changed or "hotkey_selection" in changed:
+        if any(k in changed for k in ("hotkey", "hotkey_selection", "hotkey_vox")):
             self.hotkey_changed.emit(new.hotkey)
         if prefs.needs_gateway_restart(changed):
             self._set_status(CANT["gateway_restarting"])
@@ -390,6 +400,88 @@ class ChatWindow(QWidget):
             self._add("system", f"++ GATEWAY DID NOT RETURN ++ {message}")
             self._set_status("")
         self._render()
+
+    # ------------------------------------------------------------------ voice
+    def vox_toggle(self) -> None:
+        """The voice key: tap to start, tap again to stop (global shortcuts have no key-up)."""
+        if self._recorder is None:
+            self.show_window()
+            self.vox_start()
+        else:
+            self.vox_stop()
+
+    def vox_start(self) -> None:
+        from . import voice_io
+        if self._recorder is not None or self._stt_thread is not None:
+            return
+        ok, msg = voice_io.stt_available()
+        if not ok:
+            self._set_status(f"++ VOX UNAVAILABLE · {msg.upper()} ++")
+            return
+        rec = voice_io.Recorder()
+        if not rec.start():
+            self._set_status(f"++ VOX FAILED · {rec.error.upper()} ++")
+            return
+        self._recorder = rec
+        self.vox_btn.setText("…")
+        self._set_dot("approval")
+        self._set_status(CANT["listening"])
+
+    def vox_stop(self) -> None:
+        rec, self._recorder = self._recorder, None
+        self.vox_btn.setText("VOX")
+        self._set_dot("idle")
+        if rec is None:
+            return
+        path = rec.stop()
+        if not path:
+            self._set_status(CANT["heard_nothing"])
+            return
+        self._set_status(CANT["transcribing"])
+        worker = _Transcribe(path, settings.load().get("stt_model") or "base")
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.done.connect(self._on_transcribed)
+        worker.done.connect(thread.quit)
+        thread.finished.connect(lambda: setattr(self, "_stt_thread", None))
+        thread.finished.connect(thread.deleteLater)
+        self._stt_thread, self._stt_worker = thread, worker
+        thread.start()
+
+    @Slot(str, str)
+    def _on_transcribed(self, text: str, error: str) -> None:
+        if error:
+            self._add("system", f"++ VOX MALFUNCTION ++ {error}")
+            self._set_status("")
+            self._render()
+            return
+        if not text:
+            self._set_status(CANT["heard_nothing"])
+            return
+        cur = self.input.toPlainText().rstrip()
+        self.input.setPlainText((cur + " " if cur else "") + text)
+        self.input.moveCursor(QTextCursor.End)
+        self.input.setFocus()
+        self._set_status(CANT["heard"])
+
+    def speak(self, text: str) -> None:
+        """Read a reply aloud on a thread when Settings → Voice output is on."""
+        from . import voice_io
+        if not settings.load().get("tts"):
+            return
+        if self._speaker is None:
+            self._speaker = voice_io.Speaker()
+        self._speaker.stop()
+        voice = settings.load().get("tts_voice") or voice_io.DEFAULT_TTS_VOICE
+
+        def run():
+            try:
+                self._speaker.say(_plain_text(text), voice)
+            except Exception as exc:  # noqa: BLE001 - say why in the status line, never crash the UI
+                print(f"mikronous-tray: speech failed: {exc}", file=sys.stderr)
+        self._tts_thread = threading.Thread(target=run, name="mikronous-tts", daemon=True)
+        self._tts_thread.start()
 
     def ask_quietly(self, text: str) -> None:
         """A question from KRunner: new chat, run it, and when the window is hidden hand the answer to the tray
@@ -536,6 +628,8 @@ class ChatWindow(QWidget):
 
     @Slot()
     def stop(self) -> None:
+        if self._speaker is not None:
+            self._speaker.stop()
         if self._worker:
             self._worker.request_stop()
             self._set_status(CANT["stopping"])
@@ -627,6 +721,8 @@ class ChatWindow(QWidget):
                 self._set_status(CANT["copied"])
             if quiet is not None:
                 self.answer_ready.emit(quiet, final or "(no answer)")
+            if final:
+                self.speak(final)
         elif status == "cancelled":
             if streamed:
                 self._add("assistant", streamed)
@@ -680,6 +776,39 @@ class ChatWindow(QWidget):
         settings.save(window={"width": self.width(), "height": self.height()})
         e.ignore()
         self.hide_window()
+
+
+class _Transcribe(QObject):
+    done = Signal(str, str)        # text, error
+
+    def __init__(self, path: str, size: str):
+        super().__init__()
+        self.path, self.size = path, size
+
+    @Slot()
+    def run(self) -> None:
+        from . import voice_io
+        try:
+            text = voice_io.transcribe(self.path, self.size)
+            self.done.emit(text, "")
+        except Exception as exc:  # noqa: BLE001
+            self.done.emit("", f"{exc.__class__.__name__}: {str(exc)[:200]}")
+        finally:
+            try:
+                os.remove(self.path)
+            except OSError:
+                pass
+
+
+def _plain_text(md: str) -> str:
+    """Markdown → something a voice can read: no code fences, bullets, links or cant sign-offs."""
+    import re
+    text = re.sub(r"```.*?```", " code omitted ", md, flags=re.S)
+    text = re.sub(r"\+\+[^+\n]*\+\+", " ", text)                 # ++ 01001111 ++ style sign-offs
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)             # [text](url)
+    text = re.sub(r"^[\s>*\-#]+", "", text, flags=re.M)              # bullets, quotes, headings
+    text = re.sub(r"[`*_]{1,3}", "", text)
+    return " ".join(text.split())
 
 
 class _GatewayRestart(QObject):

@@ -22,6 +22,9 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Tray: Update button**: checks GitHub on demand, offers to apply `mik update`; a quiet background check marks the
   button when new commits exist.
 - **Tray: drop files or folders** onto the window to attach their paths to the next message.
+- **Voice input and output** (`[voice]` extra, `install.sh --voice` / `install.ps1 -VoiceInput`): hold VOX or tap
+  `Meta+Shift+V` (`Ctrl+Alt+V`), faster-whisper transcribes locally (size in Settings); optional Piper read-aloud.
+  Linux records with pw-record/parecord/arecord, Windows with sounddevice. `mik doctor` voice row.
 - **KRunner plugin** (Linux): `mik <question>` in Alt+Space; the tray serves `org.kde.krunner1` with dbus-fast, answers
   arrive as notifications when the window is hidden; `mik tray --install-krunner` writes the plugin file (installer does it).
 - **Desktop control tools** `media_control` (MPRIS play/pause/next/status) and `system_control` (volume, brightness,

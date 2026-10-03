@@ -5,6 +5,7 @@
 #   scripts/install.sh            # everything
 #   scripts/install.sh --no-model # skip model download / llama-server (already have one on :8081)
 #   scripts/install.sh --no-tray  # skip the tray app (PySide6) and the Meta+Space shortcut
+#   scripts/install.sh --voice    # also install local voice input/output (faster-whisper + Piper)
 #
 # Afterwards: `mik doctor` shows what is running.
 set -uo pipefail
@@ -18,11 +19,13 @@ UNIT_DIR="$HOME/.config/systemd/user"
 MODEL_FILE="${MIKRONOUS_MODEL_FILE:-Qwen3-4B-Instruct-2507-Q4_K_M.gguf}"
 WITH_MODEL=1
 WITH_TRAY=1
+WITH_VOICE="${MIKRONOUS_VOICE:-0}"
 FAILURES=()
 for arg in "$@"; do
   case "$arg" in
     --no-model) WITH_MODEL=0 ;;
     --no-tray) WITH_TRAY=0 ;;
+    --voice) WITH_VOICE=1 ;;
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
@@ -154,6 +157,7 @@ install_mik_venv() {
 }
 # The tray app needs PySide6 (~150 MB); it is an optional extra so headless installs stay small.
 MIK_EXTRAS=""; [[ "$WITH_TRAY" == 1 ]] && MIK_EXTRAS="[tray]"
+[[ "$WITH_TRAY" == 1 && "$WITH_VOICE" == 1 ]] && MIK_EXTRAS="[tray,voice]"
 if command -v uv >/dev/null 2>&1; then
   (cd "$REPO_DIR" && uv tool install --force --editable ".$MIK_EXTRAS" >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
 elif command -v pipx >/dev/null 2>&1; then
@@ -303,23 +307,28 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       # Plasma 5 (KF5): flat group [mikronous.desktop], _launch=<keys>,none,<name> plus _k_friendly_name.
       HOTKEY="${MIKRONOUS_HOTKEY:-Meta+Space}"
       HOTKEY_SEL="${MIKRONOUS_HOTKEY_SELECTION:-Meta+Shift+Space}"
+      HOTKEY_VOX="${MIKRONOUS_HOTKEY_VOX:-Meta+Shift+V}"
       if command -v kwriteconfig6 >/dev/null 2>&1; then KW=kwriteconfig6; KF=6
       elif command -v kwriteconfig5 >/dev/null 2>&1; then KW=kwriteconfig5; KF=5; else KW=""; fi
       write_hotkey() {
         if [[ "$KF" == 6 ]]; then
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch "$HOTKEY"
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key selection "$HOTKEY_SEL"
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key vox "$HOTKEY_VOX"
         else
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key _launch --delete 2>/dev/null || true
           "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key selection --delete 2>/dev/null || true
           "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key _k_friendly_name "Mikronous"
           "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key _launch "$HOTKEY,none,Mikronous"
           "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key selection "$HOTKEY_SEL,none,Mikronous: act on selected text"
+          "$KW" --file kglobalshortcutsrc --group services --group mikronous.desktop --key vox --delete 2>/dev/null || true
+          "$KW" --file kglobalshortcutsrc --group mikronous.desktop --key vox "$HOTKEY_VOX,none,Mikronous: voice input"
         fi
       }
       if [[ -n "$KW" ]]; then
         SECTION="$(sed -n '/\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null)"
-        if ! grep -qE "^_launch=$HOTKEY(,|$)" <<<"$SECTION" || ! grep -qE "^selection=$HOTKEY_SEL(,|$)" <<<"$SECTION"; then
+        if ! grep -qE "^_launch=$HOTKEY(,|$)" <<<"$SECTION" || ! grep -qE "^selection=$HOTKEY_SEL(,|$)" <<<"$SECTION" \
+           || ! grep -qE "^vox=$HOTKEY_VOX(,|$)" <<<"$SECTION"; then
           # The daemon writes its in-memory table to the file when it stops, so stop it BEFORE writing.
           if systemctl --user is-active --quiet plasma-kglobalaccel.service 2>/dev/null; then
             systemctl --user stop plasma-kglobalaccel.service; sleep 1
@@ -334,7 +343,7 @@ if [[ "$WITH_TRAY" == 1 ]]; then
               || (command -v kglobalaccel5 >/dev/null 2>&1 && setsid kglobalaccel5 >/dev/null 2>&1 &) || true
           fi
         fi
-        echo "shortcut: $HOTKEY opens the chat window; $HOTKEY_SEL acts on selected text (System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY= / MIKRONOUS_HOTKEY_SELECTION=)"
+        echo "shortcut: $HOTKEY opens the chat window; $HOTKEY_SEL acts on selected text; $HOTKEY_VOX is voice input (System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY= / _SELECTION= / _VOX=)"
       else
         echo "note: kwriteconfig not found; assign the shortcut in System Settings > Shortcuts > Add > Mikronous"
       fi

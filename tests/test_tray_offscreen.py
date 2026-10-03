@@ -260,6 +260,9 @@ def test_settings_dialog_values(app):
     v = d.values()
     assert (v.voice, v.approvals, v.internet, v.keep_model, v.docs_dirs) == ("plain", "manual", False, True, "~/Docs")
     assert v.changed_from(cur) == ["voice", "approvals", "internet", "keep_model", "docs_dirs"]
+    d.tts.setChecked(True)
+    d.stt_model.setCurrentIndex(2)
+    assert d.values().tts is True and d.values().stt_model == "small"
 
 
 def test_routines_helpers():
@@ -386,3 +389,28 @@ def test_ask_quietly_emits_answer_when_hidden(app):
     app.processEvents()
     assert got == [("what time is it in Tokyo", "It is 09:00 in Tokyo.")] and not w.isVisible()
     assert w.messages[-1]["text"] == "It is 09:00 in Tokyo."
+
+
+def test_vox_flow_with_fake_recorder(app, monkeypatch):
+    from mikronous_tray import chat_window, voice_io
+    from mikronous_tray.chat_window import ChatWindow, _plain_text
+
+    class FakeRecorder:
+        error = ""
+        def start(self): return True
+        def stop(self): return "/tmp/fake.wav"
+    monkeypatch.setattr(voice_io, "Recorder", FakeRecorder)
+    monkeypatch.setattr(voice_io, "stt_available", lambda: (True, "ready"))
+    monkeypatch.setattr(voice_io, "transcribe", lambda path, size="base", language=None: "remind me to blink")
+    monkeypatch.setattr(chat_window.os, "remove", lambda p: None)
+    w = ChatWindow(FakeClient())
+    assert w.vox_btn.text() == "VOX"
+    w.vox_toggle()
+    assert w._recorder is not None and "LISTENING" in w.status.text() and w.vox_btn.text() == "…"
+    w.vox_toggle()
+    assert pump(app, lambda: w._stt_thread is None and w.input.toPlainText(), 10)
+    assert w.input.toPlainText() == "remind me to blink" and "HEARD" in w.status.text()
+    monkeypatch.setattr(voice_io, "stt_available", lambda: (False, "no recorder found"))
+    w.vox_start()
+    assert w._recorder is None and "UNAVAILABLE" in w.status.text()
+    assert _plain_text("++ 01001111 ++ **Done**: see [docs](http://x)\n- item `a`\n```py\nx=1\n```") == "Done: see docs item a code omitted"

@@ -147,6 +147,21 @@ def run_checks() -> list[tuple[str, str, str]]:
         rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
                      else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
 
+    # 8. Voice (optional extra)
+    try:
+        from mikronous_tray import voice_io
+        stt_ok, stt_msg = voice_io.stt_available()
+        tts_ok, tts_msg = voice_io.tts_available()
+        if stt_ok or tts_ok:
+            size = _tray_setting("stt_model", "base")
+            cached = voice_io.stt_model_cached(size)
+            rows.append(("voice", OK, f"input {'ready' if stt_ok else 'off: ' + stt_msg}; model '{size}' "
+                         f"{'cached' if cached else 'downloads on first use'}; output {'ready' if tts_ok else 'off: ' + tts_msg}"))
+        else:
+            rows.append(("voice", WARN, "not installed — scripts/install.sh --voice (optional)"))
+    except Exception:  # noqa: BLE001 - PySide-less environments
+        pass
+
     return rows
 
 
@@ -190,6 +205,15 @@ def _windows_autostart() -> bool:
             return True
     except Exception:  # noqa: BLE001
         return False
+
+
+def _tray_setting(key: str, default: str) -> str:
+    try:
+        import json
+        from .paths import CONF_DIR
+        return str(json.loads((CONF_DIR / "tray.json").read_text(encoding="utf-8")).get(key) or default)
+    except (OSError, ValueError):
+        return default
 
 
 def _shortcut_key(action: str = "_launch") -> str:

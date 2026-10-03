@@ -10,6 +10,7 @@ Subcommands:
   settings Open the tray's Settings dialog.  chats: toggle the past-chats pane.  routines: the Routines tab.
   routine  Scheduled agent tasks from the terminal: list | add | pause | resume | run | remove.
   selection  Act on the text highlighted in any app (the Meta+Shift+Space shortcut runs this).
+  vox      Start/stop voice input (the Meta+Shift+V shortcut runs this).
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "routine":
         from . import routine
         return routine.main(argv[1:])
-    if argv and argv[0] in ("tray", "toggle", "show", "hide", "quit-tray", "settings", "chats", "routines", "selection"):
+    if argv and argv[0] in ("tray", "toggle", "show", "hide", "quit-tray", "settings", "chats", "routines", "selection", "vox"):
         from mikronous_tray.__main__ import main as tray_main
         return tray_main(argv[1:] if argv[0] == "tray" else ["quit" if argv[0] == "quit-tray" else argv[0]])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")

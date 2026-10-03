@@ -12,13 +12,15 @@
 param(
   [switch]$NoModel,
   [switch]$NoTray,
+  [switch]$VoiceInput,             # also install local voice input/output (faster-whisper + Piper + sounddevice)
   [string]$ModelRepo = "unsloth/Qwen3-4B-Instruct-2507-GGUF",
   [string]$ModelFile = "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
   [string]$LlamaBackend = "",      # cuda-13.4 | cuda-12.4 | vulkan | cpu (default: detect)
   [string]$LlamaTag = "",          # pin a llama.cpp nightly tag, e.g. b11146
   [string]$Voice = "full",         # plain | light | full (kept on re-runs)
   [string]$Hotkey = "Ctrl+Alt+Space",
-  [string]$HotkeySelection = "Ctrl+Alt+Shift+Space"
+  [string]$HotkeySelection = "Ctrl+Alt+Shift+Space",
+  [string]$HotkeyVox = "Ctrl+Alt+V"
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -152,7 +154,7 @@ HP plugins enable mikronous 2>$null | Out-Null
 
 # ---------------------------------------------------------------------------
 Step "mik CLI"
-$Extras = if ($NoTray) { "" } else { "[tray]" }
+$Extras = if ($NoTray) { "" } elseif ($VoiceInput) { "[tray,voice]" } else { "[tray]" }
 $Mik = $null
 if (Have pipx) {
   pipx install --force --editable "$RepoDir$Extras" | Out-Null; Refresh-Path
@@ -271,6 +273,7 @@ if (-not $NoTray -and $Mik) {
     $state = if (Test-Path $stateFile) { Get-Content $stateFile -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
     $state | Add-Member -NotePropertyName hotkey -NotePropertyValue $Hotkey -Force
     $state | Add-Member -NotePropertyName hotkey_selection -NotePropertyValue $HotkeySelection -Force
+    $state | Add-Member -NotePropertyName hotkey_vox -NotePropertyValue $HotkeyVox -Force
     $state | ConvertTo-Json | Set-Content $stateFile
     $pyw = Join-Path (Split-Path $Mik) "pythonw.exe"
     if (-not (Test-Path $pyw)) { $pyw = (Get-Command pythonw -ErrorAction SilentlyContinue).Source }

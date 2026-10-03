@@ -60,6 +60,10 @@ CANT = {
     "attached": "++ {n} FILE(S) PLACED ON THE SLATE · ASK AWAY ++",
     "no_selection": "++ NOTHING IS SELECTED · HIGHLIGHT TEXT IN ANY APP, THEN PRESS THE SELECTION KEY ++",
     "copied": "++ RITE COMPLETE · THE ANSWER IS ON THE CLIPBOARD ++",
+    "listening": "++ LISTENING · RELEASE TO TRANSCRIBE ++",
+    "transcribing": "++ TRANSCRIBING ++",
+    "heard": "++ HEARD · EDIT OR TRANSMIT ++",
+    "heard_nothing": "++ HEARD NOTHING ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}
