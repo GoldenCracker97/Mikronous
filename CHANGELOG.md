@@ -15,6 +15,10 @@ All notable changes to Mikronous are recorded here. The format follows
   is not found. `MIKRONOUS_SKIP_HERMES_INSTALL=1` opts out.
 - `mik model start|stop|restart|running` to control the model server on either OS.
 
+### Fixed
+- `web_extract` failed with "DuckDuckGo is a search-only backend": the profile pinned DuckDuckGo for search,
+  which left page extraction without a backend. Search and extraction now both use Hermes's keyless ring.
+
 ### Changed
 - The model server is managed through `mikronous_model.runner` (systemd on Linux, a detached process with a
   pid file on Windows); `mik doctor`, `mik model` and the tray all use it.

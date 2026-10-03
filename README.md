@@ -14,7 +14,7 @@ Release: **v0.1.0** ([changelog](CHANGELOG.md)), verified on a Plasma 5.27 deskt
 
 | Piece | What it does | Phase |
 |---|---|---|
-| Hermes profile `mikronous` | Own persona (`SOUL.md`), memory, config; full Hermes toolset + the web (keyless DuckDuckGo) | 0 |
+| Hermes profile `mikronous` | Own persona (`SOUL.md`), memory, config; full Hermes toolset + the web (keyless, no account) | 0 |
 | `mikronous-llama.service` | llama.cpp server on `:8081`, tuned for ~8 GB VRAM by default | 0 |
 | `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search`, `set_reminder`; skills `daily-briefing`, `file-qa`; `/notes` | 1 ✓ |
@@ -118,7 +118,7 @@ please report what breaks.
 | | |
 |---|---|
 | Model, memory, notes, documents, chat history | Never leave. The model is pinned to `llama-server` on `127.0.0.1:8081`; Hermes side tasks (summaries, titles) use the same model or are skipped. |
-| Web search and page extraction | Go out, like a browser would: DuckDuckGo for search, Hermes's keyless free tiers (Exa, Parallel, Firecrawl, Keenable) for page text. No account, no key, no identifiers. `mik privacy offline` turns both off. |
+| Web search and page extraction | Go out, like a browser would, through Hermes's keyless free tiers (Exa, Parallel, Firecrawl, Keenable), rotating between them. No account, no key, no identifiers. `mik privacy offline` turns both off. |
 | Paid services | Nothing can enrol you. Toolsets that only work with paid keys (`image_gen`, `video_gen`, `tts`, `x_search`, `vision`) and the Nous-managed `connections` toolset are disabled in the profile, Claude Code / Codex login borrowing is off, telemetry is off, and no fallback providers are configured. Nous Portal is only ever enabled by running `hermes setup --portal` yourself. |
 
 `mik privacy status` prints the live state of each line above; `mik doctor` includes it as the `local-only` row.
