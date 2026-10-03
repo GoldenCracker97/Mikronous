@@ -15,21 +15,31 @@ from . import doctor
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "model":  # hand everything after `model` to its own parser (keeps --help working)
+        return _model(argv[1:])
     parser = argparse.ArgumentParser(prog="mik", description="Mikronous desktop assistant tools")
     sub = parser.add_subparsers(dest="cmd")
 
     p_doc = sub.add_parser("doctor", help="check install state of every component")
     p_doc.set_defaults(func=lambda a: doctor.main())
 
-    for name, phase in (("model", "0.5"), ("toggle", "3")):
-        p = sub.add_parser(name, help=f"(not yet available; arrives in Phase {phase})")
-        p.set_defaults(func=lambda a, n=name, ph=phase: _not_yet(n, ph))
+    p_model = sub.add_parser("model", help="fit the local model to this hardware (detect/list/recommend/use/tune/status/bench)")
+    p_model.set_defaults(func=lambda a: _model([]))
+
+    p_tog = sub.add_parser("toggle", help="(not yet available; arrives in Phase 3)")
+    p_tog.set_defaults(func=lambda a: _not_yet("toggle", "3"))
 
     args = parser.parse_args(argv)
     if not args.cmd:
         parser.print_help()
         return 1
     return args.func(args)
+
+
+def _model(rest: list[str]) -> int:
+    from mikronous_model.cli import main as model_main
+    return model_main(rest, prog="mik model")
 
 
 def _not_yet(name: str, phase: str) -> int:

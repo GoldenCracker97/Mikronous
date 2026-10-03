@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Status: **Phase 0** — profile, plugin stub, local model server, gateway. No tray UI yet.
+Status: **Phase 0.5** — profile, local model server, gateway, hardware-fit tool. No tray UI yet.
 
 ## What you get
 
@@ -14,7 +14,7 @@ Status: **Phase 0** — profile, plugin stub, local model server, gateway. No tr
 |---|---|---|
 | Hermes profile `mikronous` | Own persona (`SOUL.md`), memory, config; full Hermes toolset + the web (keyless DuckDuckGo) | 0 |
 | `mikronous-llama.service` | llama.cpp server on `:8081`, tuned for ~8 GB VRAM by default | 0 |
-| `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 |
+| `mik model` | Detect your hardware, pick/tune model, quant, context, KV cache; works for any GGUF | 0.5 ✓ |
 | Hermes plugin `mikronous` | Tools: `desktop_notify`, `desktop_open`, `clipboard`, `notes_manage`, `docs_search` | 1 |
 | `mikronous` platform | Reminders from Hermes cron arrive as KDE notifications | 2 |
 | Tray app | Hotkey (`Meta+Space`) chat window, streaming, approval cards | 3 |
@@ -69,16 +69,32 @@ whichever applies.
 `mikronous` is the Hermes profile command (created by `hermes profile create mikronous`);
 `mik` is this project's own CLI.
 
-## Tuning the model by hand (until `mik model` lands)
+## Fit the model to your hardware: `mik model`
 
-Edit `~/.config/mikronous/llama.env`:
+```bash
+mik model detect                 # GPU / VRAM / RAM / CPU and the memory budget
+mik model list                   # presets with a green / amber / red verdict for this machine
+mik model recommend --apply      # pick the best preset, download, write settings, restart
+mik model use qwen3-8b --apply   # a specific preset
+mik model use hf:unsloth/Qwen3-14B-GGUF --apply          # any Hugging Face GGUF (Q4_K_M picked)
+mik model use hf:owner/repo:file.gguf --ctx 32768 --apply # exact file + context override
+mik model use ~/models/anything.gguf --apply              # a local file
+mik model tune --kv f16 --ctx 65536                       # change KV cache / context and restart
+mik model tune --backend vulkan                           # switch llama.cpp build (cuda|vulkan|cpu)
+mik model status                 # current settings and whether they still fit
+mik model bench                  # prompt + generation tokens/s, VRAM in use
+```
 
-- `LLAMA_MODEL`: any GGUF path. `scripts/fetch-model.sh owner/repo file.gguf` downloads one.
-- `LLAMA_CTX`: context tokens. Hermes wants at least 65536.
-- `LLAMA_KV_K` / `LLAMA_KV_V`: `f16` (best), `q8_0`, `q4_0` (smallest). Memory for the KV cache roughly halves at each step.
-- `LLAMA_NGL`: layers on the GPU; lower it to spill into system RAM when the model does not fit.
+How the fit works: weights (file size) + KV cache (context × layers × KV heads × head size × bytes
+per element) + runtime overhead must fit the free VRAM minus 512 MiB headroom. The tool keeps the
+64k context Hermes needs by quantising the KV cache first (`f16` → `q8_0` → `q8_0/q4_0` → `q4_0`),
+only then shrinks the context, and only then spills layers to system RAM (`LLAMA_NGL`). Models
+with a shorter native context get YaRN rope scaling automatically. Everything lands in
+`~/.config/mikronous/llama.env`, which you can also edit by hand, then
+`systemctl --user restart mikronous-llama`.
 
-Then `systemctl --user restart mikronous-llama`.
+Hermes's own local-model catalog (27B+ models) shows up in `mik model list` too when Hermes is
+installed from git.
 
 ## Layout
 
