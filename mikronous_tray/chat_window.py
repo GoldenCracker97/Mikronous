@@ -328,7 +328,8 @@ class ChatWindow(QWidget):
             self._add("system", f"Error: {text.strip() or 'the run ended without a reply (see `mikronous gateway status`)'}")
         self._stall_timer.stop()
         self._set_status("")
-        self._schedule_render()
+        self._render_timer.stop()
+        self._render()                      # final state immediately, not on the next timer tick
 
     # ------------------------------------------------------------------ misc
     def _set_status(self, text: str) -> None:
