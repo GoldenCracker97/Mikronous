@@ -45,6 +45,9 @@ CANT = {
     "stall": "++ THE MACHINE SPIRIT IS SLOW TO ANSWER · CEASE, OR BEGIN ANEW (CTRL+N) ++",
     "new": "++ NEW RITE BEGUN ++",
     "session": "++ RITE RESUMED ++",
+    "model_waking": "++ THE COGITATOR WAKES · THE FIRST ANSWER MAY TAKE A MOMENT ++",
+    "model_ready": "++ COGITATOR READY ++",
+    "model_unloaded": "++ COGITATOR DORMANT · LOAD IT FROM THE TRAY MENU ++",
 }
 
 APPROVAL_LABELS = {"once": "Sanction once", "session": "This session", "always": "Always", "deny": "Refuse"}

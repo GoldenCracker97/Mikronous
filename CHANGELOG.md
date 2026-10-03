@@ -26,6 +26,8 @@ and llama.cpp on your own GPU.
 - **Machine Cult theme**: data-slate window (iron, brass, Martian red, phosphor green), original
   cog-and-circuit icons, bundled OFL fonts, boot litany, and persona voice levels (`mik voice
   plain|light|full`).
+- **Model lifecycle**: the tray loads the model on launch and unloads it on Quit (or via the tray
+  menu), so quitting frees the VRAM; `MIKRONOUS_KEEP_MODEL=1` opts out.
 - **`mik doctor`**: one-screen health check of every piece, including tray and shortcut state.
 - **`mik ask`, `mik tools`, `mik docs`**: terminal access to the gateway, toolsets and document index.
 

@@ -391,6 +391,13 @@ class ChatWindow(QWidget):
         self._render_timer.stop()
         self._render()                      # final state immediately, not on the next timer tick
 
+    def set_model_state(self, state: str) -> None:
+        """Called by the tray: reflect the llama-server state when no turn is running."""
+        self._model_state = state
+        if self._worker is None and state in ("waking", "unloaded", "ready"):
+            self._set_status(CANT[f"model_{state}"] if state != "ready" or self.status.text() else "")
+            self._set_dot("thinking" if state == "waking" else "idle")
+
     # ------------------------------------------------------------------ misc
     def _set_status(self, text: str) -> None:
         self.status.setText(text)

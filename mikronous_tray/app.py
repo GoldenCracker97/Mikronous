@@ -14,6 +14,7 @@ from . import settings
 from .chat_window import ChatWindow
 from .hermes_client import HermesClient
 from .inbox import InboxServer
+from .model_service import ModelService
 
 
 def _tray_icon() -> QIcon:
@@ -76,7 +77,10 @@ class TrayApp(QObject):
         a.triggered.connect(self._status)
         menu.addAction(a)
         menu.addSeparator()
-        a = QAction("Quit", menu)
+        self.act_model = QAction("Unload model (free VRAM)", menu)
+        self.act_model.triggered.connect(self._toggle_model)
+        menu.addAction(self.act_model)
+        a = QAction("Quit (unloads the model)", menu)
         a.triggered.connect(self.quit)
         menu.addAction(a)
         self.tray.setContextMenu(menu)
@@ -84,6 +88,27 @@ class TrayApp(QObject):
         self.tray.show()
         self._orig_show = self.window.show_window
         self.window.show_window = self._show_with_litany  # first show after start plays the litany
+
+        # The model is loaded while the tray runs and unloaded when it quits.
+        self.model = ModelService(self)
+        self.model.state_changed.connect(self._model_state)
+        self.model.ensure_loaded()
+        self._model_state(self.model.state)
+
+    def _model_state(self, state: str) -> None:
+        label = {"ready": "Unload model (free VRAM)", "waking": "Model is loading…", "unloaded": "Load model",
+                 "unknown": "Model: not managed here"}[state]
+        self.act_model.setText(label)
+        self.act_model.setEnabled(state in ("ready", "unloaded"))
+        self.tray.setToolTip({"ready": "Mikronous — model loaded", "waking": "Mikronous — model loading",
+                              "unloaded": "Mikronous — model unloaded", "unknown": "Mikronous"}[state])
+        self.window.set_model_state(state)
+
+    def _toggle_model(self) -> None:
+        if self.model.state == "ready":
+            self.model.unload()
+        else:
+            self.model.ensure_loaded()
 
     def _show_with_litany(self) -> None:
         self._orig_show()
@@ -134,6 +159,8 @@ class TrayApp(QObject):
 
     def quit(self) -> None:
         self.window.stop()
+        if self.model.unload_on_quit():
+            self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident
         self.inbox.stop()
         self.control.close()
         QLocalServer.removeServer(settings.CONTROL_SERVER)

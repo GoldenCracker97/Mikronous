@@ -120,3 +120,45 @@ def test_inbox_socket(app):
     assert pump(app, lambda: got, 5)
     assert got[0]["text"] == "Stretch"
     ib.stop()
+
+
+def test_model_service_without_systemd(app, monkeypatch):
+    from mikronous_tray import model_service
+    monkeypatch.setattr(model_service.shutil, "which", lambda name: None)
+    monkeypatch.setattr(model_service.ModelService, "answers", staticmethod(lambda: False))
+    svc = model_service.ModelService()
+    assert svc.refresh() == "unknown"
+    svc.ensure_loaded()                      # must not raise without systemd
+    svc.unload()
+    assert svc.state == "unloaded"
+    monkeypatch.setenv("MIKRONOUS_KEEP_MODEL", "1")
+    assert svc.unload_on_quit() is False
+
+
+def test_model_service_systemd_flow(app, monkeypatch):
+    from mikronous_tray import model_service
+    calls = []
+    monkeypatch.setattr(model_service.shutil, "which", lambda name: "/bin/systemctl")
+    state = {"active": False, "answers": False}
+
+    def fake_systemctl(*args):
+        calls.append(args)
+        class R:
+            stdout = "active\n" if state["active"] else "inactive\n"
+        if args[0] == "start":
+            state["active"] = True
+        if args[0] == "stop":
+            state["active"] = False
+        return R()
+    monkeypatch.setattr(model_service, "_systemctl", fake_systemctl)
+    monkeypatch.setattr(model_service.ModelService, "answers", staticmethod(lambda: state["answers"]))
+    seen = []
+    svc = model_service.ModelService()
+    svc.state_changed.connect(seen.append)
+    svc.ensure_loaded()
+    assert ("start", model_service.UNIT) in calls and svc.state == "waking"
+    state["answers"] = True
+    assert pump(app, lambda: svc.state == "ready", 5)
+    svc.unload()
+    assert ("stop", model_service.UNIT) in calls and svc.state == "unloaded"
+    assert seen[:1] == ["waking"] or "waking" in seen

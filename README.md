@@ -136,6 +136,13 @@ The window talks to the same gateway as `mik ask`: `POST /v1/runs` plus the run'
 stream, with one Hermes session per chat (`New chat` in the tray menu starts another; the current
 one survives restarts via `~/.config/mikronous/tray.json` and is reloaded from the gateway).
 
+**Model lifecycle.** The tray owns the model: it starts `mikronous-llama.service` when it launches
+(the status line reads "the cogitator wakes" until the first answer is possible) and stops it on
+**Quit**, so quitting Mikronous frees the VRAM for games or other work. The tray menu also has
+"Unload model" / "Load model" for the same without quitting. Reminders keep firing either way: the
+gateway stays up and no-agent reminders need no model. Set `MIKRONOUS_KEEP_MODEL=1` in the
+environment to keep the model resident across Quit.
+
 **Approvals.** When Hermes flags a command as dangerous (`rm -rf`, `chmod 777`, `sudo`, …) the window
 shows an approval card with the choices Hermes offers. The default mode is `smart`: a guardian pass
 on the local model lets clearly harmless flagged commands through and asks you about the rest, so
