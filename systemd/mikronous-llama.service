@@ -7,7 +7,9 @@ After=default.target
 Type=simple
 # All tunables live in the env file so `mik model` can rewrite them without touching the unit.
 EnvironmentFile=%h/.config/mikronous/llama.env
-ExecStart=/bin/sh -c 'exec "${LLAMA_SERVER}" --host 127.0.0.1 --port "${LLAMA_PORT}" \
+# Prebuilt llama.cpp ships its shared libraries next to the binary, so put that dir on the loader path.
+ExecStart=/bin/sh -c 'export LD_LIBRARY_PATH="$(dirname "${LLAMA_SERVER}")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; \
+    exec "${LLAMA_SERVER}" --host 127.0.0.1 --port "${LLAMA_PORT}" \
     -m "${LLAMA_MODEL}" --alias "${LLAMA_ALIAS}" \
     -c "${LLAMA_CTX}" -ngl "${LLAMA_NGL}" -t "${LLAMA_THREADS}" \
     -ctk "${LLAMA_KV_K}" -ctv "${LLAMA_KV_V}" -fa on --jinja \

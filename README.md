@@ -30,10 +30,23 @@ scripts/install.sh
 mik doctor
 ```
 
-The installer creates the Hermes profile, links the plugin, builds or downloads
-`llama-server` (CUDA if `nvcc` is present, otherwise Vulkan), downloads the default model
+The installer creates the Hermes profile, links the plugin, installs the `mik` CLI, downloads a
+prebuilt `llama-server` from the llama.cpp nightly releases, downloads the default model
 (Qwen3-4B-Instruct Q4_K_M, ~2.5 GB) into `~/.hermes/models`, and starts two user services:
 `mikronous-llama` and `hermes-gateway-mikronous`.
+
+The llama.cpp backend is picked from your hardware, no CUDA toolkit needed:
+
+| Hardware | Backend | How it is chosen |
+|---|---|---|
+| NVIDIA, driver CUDA ≥ 13.4 | `cuda-13.4` prebuilt | `nvidia-smi` reports the driver's CUDA version |
+| NVIDIA, driver CUDA ≥ 12.8 | `cuda-12.8` prebuilt | same |
+| NVIDIA with an older driver, AMD, Intel | `vulkan` prebuilt | GPU present without a usable CUDA driver |
+| No GPU | `cpu` prebuilt | |
+
+Override with `MIKRONOUS_LLAMA_BACKEND=cuda|vulkan|cpu|cuda-build` (the last compiles from source
+and needs `nvcc`), pin a nightly with `MIKRONOUS_LLAMA_TAG=b11146`, or force a fresh install
+with `MIKRONOUS_LLAMA_REINSTALL=1`.
 
 Already running your own llama-server on `:8081`? Use `scripts/install.sh --no-model`.
 

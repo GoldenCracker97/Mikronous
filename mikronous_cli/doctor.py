@@ -79,7 +79,13 @@ def run_checks() -> list[tuple[str, str, str]]:
         exists = Path(model).expanduser().exists() if model else False
         rows.append(("model file", OK if exists else FAIL, model or "LLAMA_MODEL unset"))
         server = env.get("LLAMA_SERVER", "")
-        rows.append(("llama-server binary", OK if server and Path(server).exists() else FAIL, server or "LLAMA_SERVER unset"))
+        if server and Path(server).exists():
+            prefix = Path(server).parent.parent
+            backend = (prefix / "BACKEND").read_text().strip() if (prefix / "BACKEND").exists() else "custom"
+            tag = (prefix / "TAG").read_text().strip() if (prefix / "TAG").exists() else ""
+            rows.append(("llama-server binary", OK, f"{server} [{backend}{' ' + tag if tag else ''}]"))
+        else:
+            rows.append(("llama-server binary", FAIL, server or "LLAMA_SERVER unset"))
     state = _systemd_active("mikronous-llama.service")
     rows.append(("mikronous-llama.service", OK if state == "active" else WARN, state or "systemctl unavailable"))
     try:
@@ -112,5 +118,8 @@ def main() -> int:
         print(f"[{status:>4}] {name:<{width}}  {detail}")
     failed = sum(1 for r in rows if r[1] == FAIL)
     print()
+    local_bin = str(Path("~/.local/bin").expanduser())
+    if local_bin not in os.environ.get("PATH", "").split(os.pathsep):
+        print(f"note: {local_bin} is not on PATH; add it so `mik` and `mikronous` resolve.")
     print("All good." if not failed else f"{failed} check(s) failed. See scripts/install.sh and README.md.")
     return 0 if not failed else 1
