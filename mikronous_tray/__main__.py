@@ -28,6 +28,12 @@ def main(argv: list[str] | None = None) -> int:
         out = argv[1] if len(argv) > 1 else "mikronous.png"
         ok = theme.qicon("color").pixmap(QSize(48, 48)).save(out, "PNG")
         return 0 if ok else 1
+    if cmd == "--install-krunner":        # install.sh: write the KRunner D-Bus plugin desktop file
+        if not sys.platform.startswith("linux"):
+            return 1
+        from .krunner import install_desktop_file
+        print(install_desktop_file())
+        return 0
     try:
         from .app import send_control
     except ImportError as exc:

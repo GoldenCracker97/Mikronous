@@ -293,6 +293,11 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 >/dev/null 2>&1 || true
       command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 >/dev/null 2>&1 || true
       echo "installed: $APPS/mikronous.desktop, autostart entry, icon"
+      # KRunner: `mik <question>` in Alt+Space (the tray serves org.kde.krunner1 over D-Bus).
+      "$MIK" tray --install-krunner >/dev/null 2>&1 && {
+        { command -v kquitapp6 >/dev/null 2>&1 && kquitapp6 krunner >/dev/null 2>&1; } \
+          || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 krunner >/dev/null 2>&1; } || true
+        echo "installed: KRunner plugin (type: mik <question> in Alt+Space)"; } || true
       # Plasma only activates a .desktop file's X-KDE-Shortcuts once it is in kglobalshortcutsrc.
       # Plasma 6 (KF6): nested group [services][mikronous.desktop], _launch=<keys>.
       # Plasma 5 (KF5): flat group [mikronous.desktop], _launch=<keys>,none,<name> plus _k_friendly_name.

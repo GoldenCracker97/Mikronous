@@ -154,6 +154,7 @@ please report what breaks.
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
 | `mik docs status\|reindex\|search <q>` | Document index used by `docs_search` |
 | `mik voice [plain\|light\|full]` | How much machine-priest the assistant speaks |
+| `Alt+Space` → `mik <question>` | Ask from KRunner without opening the window; the answer arrives as a notification |
 | `mik settings` / `mik chats` / `mik routines` | Open the tray's Settings dialog / toggle the past-chats pane / open the Routines tab |
 | `mik routine list\|add\|pause\|resume\|run\|remove` | Scheduled agent tasks that deliver to the desktop, from a terminal |
 | `mik model start\|stop\|restart` | Start or stop the model server by hand (systemd on Linux, a background process on Windows) |
@@ -183,6 +184,12 @@ model stays loaded on Quit, and on Windows the hotkey. Changes that the gateway 
 checks GitHub and, when there are new commits, offers to pull, re-install and restart the tray (the
 same as `mik update`). The tray also checks quietly in the background and marks the button
 `UPDATE •` when something is new; it never installs anything without being asked.
+
+**KRunner.** Press `Alt+Space`, type `mik what time is it in Tokyo`, Enter. The question runs in a
+fresh chat; when the window is hidden the answer comes as a notification (click it to open the slate).
+`mik settings`, `mik routines`, `mik chats`, `mik new` and `mik update` work there too. The tray serves
+KRunner's D-Bus plugin interface itself; the installer drops the plugin file and restarts KRunner.
+`MIKRONOUS_NO_KRUNNER=1` turns it off.
 
 **Media and system control.** "Pause the music", "next track", "what's playing?", "volume 30",
 "mute", "dim the screen to 40", "don't disturb me for an hour", "lock the screen", "bring up Firefox".

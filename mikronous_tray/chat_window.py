@@ -137,6 +137,7 @@ class ChatWindow(QWidget):
     hidden_by_user = Signal()
     update_requested = Signal()          # the UPDATE button; the tray app owns the checker
     hotkey_changed = Signal(str)         # Windows: re-register after Settings
+    answer_ready = Signal(str, str)      # (question, answer) for a turn started while the window was hidden
 
     def __init__(self, client: HermesClient):
         super().__init__()
@@ -157,6 +158,7 @@ class ChatWindow(QWidget):
         self._settings_thread: QThread | None = None
         self._update_state = "idle"
         self._copy_next_answer = False
+        self._quiet_question: str | None = None
 
         self.setObjectName("chatRoot")
         self.setWindowTitle("Mikronous")
@@ -389,6 +391,21 @@ class ChatWindow(QWidget):
             self._set_status("")
         self._render()
 
+    def ask_quietly(self, text: str) -> None:
+        """A question from KRunner: new chat, run it, and when the window is hidden hand the answer to the tray
+        (notification) through ``answer_ready`` instead of raising the window."""
+        text = (text or "").strip()
+        if not text:
+            return
+        if self._worker:
+            self.stop()
+        self.new_chat()
+        self._quiet_question = text
+        self._add("user", text)
+        self._streaming = ""
+        self._schedule_render()
+        self._start_worker(text)
+
     # ------------------------------------------------------------------ selected-text actions
     def selection_menu(self, text: str | None = None) -> None:
         """Grab the highlighted text (or use ``text``) and offer the actions at the cursor."""
@@ -598,14 +615,18 @@ class ChatWindow(QWidget):
         self.approval_card.hide()
         streamed = (self._streaming or "").strip()
         self._streaming = None
+        quiet, self._quiet_question = self._quiet_question, None
+        copy, self._copy_next_answer = self._copy_next_answer, False
         if status == "completed":
             final = text.strip() or streamed
             if final:
                 self._add("assistant", final)
             self._set_status(CANT["complete"])
-            if self._copy_next_answer and final:
+            if copy and final:
                 selection.set_clipboard(final)
                 self._set_status(CANT["copied"])
+            if quiet is not None:
+                self.answer_ready.emit(quiet, final or "(no answer)")
         elif status == "cancelled":
             if streamed:
                 self._add("assistant", streamed)
@@ -616,7 +637,8 @@ class ChatWindow(QWidget):
                 self._add("assistant", streamed)
             self._add("system", f"++ MALFUNCTION ++ {text.strip() or 'the rite ended without an answer (see `mikronous gateway status`)'}")
             self._set_status("")
-        self._copy_next_answer = False
+            if quiet is not None:
+                self.answer_ready.emit(quiet, text.strip() or "The rite failed; open the slate for details.")
         self._stall_timer.stop()
         self._render_timer.stop()
         self._render()                      # final state immediately, not on the next timer tick

@@ -369,3 +369,20 @@ def test_selection_action_copies_result(app):
     assert w.input.toPlainText().startswith('"""\nsome text\n"""') and w._worker is None
     w.selection_menu("")
     assert "NOTHING IS SELECTED" in w.status.text()
+
+
+def test_ask_quietly_emits_answer_when_hidden(app):
+    from mikronous_tray.chat_window import ChatWindow
+
+    class PlainClient(FakeClient):
+        def events(self, run_id, should_stop=None):
+            yield RunEvent("run.completed", {"output": "It is 09:00 in Tokyo."})
+
+    w = ChatWindow(PlainClient())
+    got = []
+    w.answer_ready.connect(lambda q, a: got.append((q, a)))
+    w.ask_quietly("what time is it in Tokyo")
+    assert pump(app, lambda: w._worker is None, 15)
+    app.processEvents()
+    assert got == [("what time is it in Tokyo", "It is 09:00 in Tokyo.")] and not w.isVisible()
+    assert w.messages[-1]["text"] == "It is 09:00 in Tokyo."

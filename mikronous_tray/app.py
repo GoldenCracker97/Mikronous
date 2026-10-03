@@ -59,6 +59,8 @@ UPDATE_RECHECK_MS = 6 * 3600 * 1000
 
 
 class TrayApp(QObject):
+    krunner_run = Signal(str)            # match id from the D-Bus thread → handled on the Qt thread
+
     def __init__(self, app: QApplication):
         super().__init__()
         self.app = app
@@ -118,6 +120,7 @@ class TrayApp(QObject):
         menu.addAction(a)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._activated)
+        self.tray.messageClicked.connect(self.window.show_window)
         self.tray.show()
         self._orig_show = self.window.show_window
         self.window.show_window = self._show_with_litany  # first show after start plays the litany
@@ -136,6 +139,16 @@ class TrayApp(QObject):
         self.hotkey_selection = None
         if sys.platform == "win32":
             self._register_hotkeys()
+
+        # KRunner (Linux): `mik <question>` in Alt+Space; answers arrive as notifications when the window is hidden.
+        self.krunner = None
+        self.window.answer_ready.connect(self._quiet_answer)
+        if sys.platform.startswith("linux") and os.environ.get("MIKRONOUS_NO_KRUNNER", "") not in ("1", "true", "yes"):
+            from .krunner import KRunnerService
+            self.krunner = KRunnerService(self.krunner_run.emit)
+            self.krunner_run.connect(self._krunner_run)
+            if not self.krunner.start():
+                print(f"mikronous-tray: KRunner integration off: {self.krunner.error}", file=sys.stderr)
 
         # The model is loaded while the tray runs and unloaded when it quits.
         self.model = ModelService(self)
@@ -218,6 +231,21 @@ class TrayApp(QObject):
         if box.exec() == QMessageBox.Yes:
             self._update()
 
+    # ------------------------------------------------------------------ KRunner
+    def _krunner_run(self, match_id: str) -> None:
+        kind, _, arg = match_id.partition(":")
+        if kind == "ask":
+            self.window.ask_quietly(arg)
+        elif kind == "cmd":
+            self._control_command(arg)
+
+    def _quiet_answer(self, question: str, answer: str) -> None:
+        if self.window.isVisible():
+            return
+        short = answer.strip().replace("\n\n", "\n")
+        self.tray.showMessage(f"Mikronous: {question[:60]}", short[:400] + ("…" if len(short) > 400 else ""),
+                              QSystemTrayIcon.Information, 15000)
+
     def _model_state(self, state: str) -> None:
         label = {"ready": "Unload model (free VRAM)", "waking": "Model is loading…", "unloaded": "Load model",
                  "unknown": "Model: not managed here"}[state]
@@ -250,31 +278,34 @@ class TrayApp(QObject):
             sock.waitForReadyRead(500)
             cmd = bytes(sock.readAll().data()).decode(errors="replace").strip()
             sock.deleteLater()
-            if cmd == "toggle":
-                self.window.toggle()
-            elif cmd == "show":
-                self.window.show_window()
-            elif cmd == "hide":
-                self.window.hide_window()
-            elif cmd == "new":
-                self.window.new_chat()
-                self.window.show_window()
-            elif cmd == "chats":
-                self.window.show_window()
-                self.window.toggle_sidebar()
-            elif cmd == "settings":
-                self.window.show_window()
-                self.window.open_settings()
-            elif cmd == "routines":
-                self.window.show_window()
-                self.window.open_settings("routines")
-            elif cmd == "selection":
-                self.window.selection_menu()
-            elif cmd == "update":
-                self.window.show_window()
-                self.check_updates(interactive=True)
-            elif cmd == "quit":
-                self.quit()
+            self._control_command(cmd)
+
+    def _control_command(self, cmd: str) -> None:
+        if cmd == "toggle":
+            self.window.toggle()
+        elif cmd == "show":
+            self.window.show_window()
+        elif cmd == "hide":
+            self.window.hide_window()
+        elif cmd == "new":
+            self.window.new_chat()
+            self.window.show_window()
+        elif cmd == "chats":
+            self.window.show_window()
+            self.window.toggle_sidebar()
+        elif cmd == "settings":
+            self.window.show_window()
+            self.window.open_settings()
+        elif cmd == "routines":
+            self.window.show_window()
+            self.window.open_settings("routines")
+        elif cmd == "selection":
+            self.window.selection_menu()
+        elif cmd == "update":
+            self.window.show_window()
+            self.check_updates(interactive=True)
+        elif cmd == "quit":
+            self.quit()
 
     def _inbox_message(self, payload: dict) -> None:
         self.window.show_inbox_message(payload)
@@ -315,6 +346,8 @@ class TrayApp(QObject):
         for hk in (self.hotkey, self.hotkey_selection):
             if hk:
                 hk.unregister()
+        if self.krunner:
+            self.krunner.stop()
         self.window.stop()
         if self.model.unload_on_quit():
             self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident
