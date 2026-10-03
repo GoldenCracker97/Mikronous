@@ -3,6 +3,7 @@
 Subcommands:
   doctor   Check that every Mikronous piece is installed and running.
   model    Fit the local model to this machine's hardware.
+  update   Pull the latest version from GitHub and re-apply the install.
   voice    Persona level: plain | light | full.
   tray     Run the tray app (chat window + hotkey target).
   toggle   Show/hide the tray chat window (starts the tray if needed).
@@ -28,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "tools":
         from . import tools_cmd
         return tools_cmd.main(argv[1:])
+    if argv and argv[0] == "update":
+        from . import update
+        return update.main(argv[1:])
     if argv and argv[0] == "voice":
         from . import voice
         return voice.main(argv[1:])
@@ -58,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     p_docs.add_argument("rest", nargs=argparse.REMAINDER)
     p_docs.set_defaults(func=lambda a: _docs(a.rest))
 
+    sub.add_parser("update", help="pull the latest Mikronous from GitHub and re-apply the install (--check | --pull)")
     sub.add_parser("voice", help="how much machine-priest the assistant speaks: plain | light | full (no arg: show)")
     sub.add_parser("tray", help="run the tray app (chat window, Meta+Space target, reminder inbox)")
     sub.add_parser("toggle", help="show/hide the chat window; starts the tray when it is not running")

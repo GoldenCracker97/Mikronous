@@ -14,6 +14,8 @@ All notable changes to Mikronous are recorded here. The format follows
 - **Hermes auto-install**: both installers run Hermes's own installer (non-interactive) when `hermes`
   is not found. `MIKRONOUS_SKIP_HERMES_INSTALL=1` opts out.
 - `mik model start|stop|restart|running` to control the model server on either OS.
+- `mik update` (and "Update Mikronous…" in the tray menu): fast-forward pull from GitHub, re-run the
+  installer without the model step, restart the tray. `--check` only reports, `--pull` skips the reinstall.
 
 ### Fixed
 - `web_extract` failed with "DuckDuckGo is a search-only backend": the profile pinned DuckDuckGo for search,

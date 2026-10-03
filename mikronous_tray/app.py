@@ -77,6 +77,9 @@ class TrayApp(QObject):
         a = QAction("Gateway status", menu)
         a.triggered.connect(self._status)
         menu.addAction(a)
+        a = QAction("Update Mikronous…", menu)
+        a.triggered.connect(self._update)
+        menu.addAction(a)
         menu.addSeparator()
         self.act_model = QAction("Unload model (free VRAM)", menu)
         self.act_model.triggered.connect(self._toggle_model)
@@ -163,6 +166,19 @@ class TrayApp(QObject):
             os.startfile(str(d))  # noqa: S606
         else:
             subprocess.Popen(["xdg-open", str(d)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _update(self) -> None:
+        """Run `mik update` detached; it pulls, re-installs and restarts this tray by itself."""
+        from mikronous_cli.platform import IS_WINDOWS, conf_dir
+        log = conf_dir() / "update.log"
+        self.tray.showMessage("Mikronous", f"Checking GitHub for updates… (log: {log})", QSystemTrayIcon.Information, 4000)
+        kwargs: dict = {"stdin": subprocess.DEVNULL}
+        if IS_WINDOWS:
+            kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kwargs["start_new_session"] = True
+        out = open(log, "ab")  # noqa: SIM115 - handed to the child
+        subprocess.Popen([sys.executable, "-m", "mikronous_cli", "update"], stdout=out, stderr=subprocess.STDOUT, **kwargs)
 
     def _status(self) -> None:
         h = self.client.health()

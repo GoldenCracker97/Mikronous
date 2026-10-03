@@ -37,7 +37,8 @@ scripts/install.sh
 mik doctor
 ```
 
-To follow development instead, stay on `Main` and re-run `scripts/install.sh` after each `git pull`.
+To follow development instead, stay on `Main` and run `mik update` now and then (also in the tray menu);
+it pulls, re-applies the install without touching your model, and restarts the tray.
 
 The installer creates the Hermes profile, links the plugin, installs the `mik` CLI (with PySide6 for
 the tray), downloads a prebuilt `llama-server` from the llama.cpp nightly releases, downloads the
@@ -132,6 +133,7 @@ please report what breaks.
 | `mikronous chat` | Talk to the assistant in the terminal (Hermes profile command) |
 | `mikronous gateway status` | Gateway (API server + cron) state |
 | `mik ask "…"` | One question through the gateway with the full toolset (`--session <id>` to continue) |
+| `mik update` | Pull the latest version from GitHub, re-apply the install, restart the tray (`--check` to only look) |
 | `mik doctor` | One-screen health check of every piece |
 | `mik tools` | Toolsets the gateway exposes to the assistant |
 | `mik privacy status\|offline\|online` | What can leave the machine; switch web access off or on |
