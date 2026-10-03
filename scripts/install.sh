@@ -164,9 +164,9 @@ fi
 
 # ---------------------------------------------------------------------------
 step "Hermes gateway (API server + cron) as a user service"
-# stdin from /dev/null makes Hermes take its defaults (start now + start on login) without prompting.
-if hp gateway install </dev/null; then
-  hp gateway restart </dev/null || hp gateway start </dev/null || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
+# Hermes asks "start now?" and "start on login?"; answer yes to both without a TTY.
+if printf 'y\ny\ny\n' | hp gateway install; then
+  printf 'y\ny\n' | hp gateway restart || printf 'y\ny\n' | hp gateway start || fail "gateway did not start; see: hermes -p $PROFILE gateway status"
 else
   fail "gateway install failed; run: hermes -p $PROFILE gateway install"
 fi
