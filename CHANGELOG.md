@@ -10,6 +10,9 @@ All notable changes to Mikronous are recorded here. The format follows
   Hermes was reported as "found" when absent and the profile step recursed until "call depth overflow". Wrappers are
   now `Invoke-Hermes`/`Invoke-HP`, and `Have` only accepts real programs; the Microsoft Store `python.exe` stub is
   no longer mistaken for Python.
+- Windows installer: the gateway step waited forever on Hermes's console prompts (piped answers are ignored); it
+  now passes `--start-now --start-on-login`, and both gateway calls have a time limit. Python is located through the
+  py launcher, PATH (minus the Store stub) and the standard install folders; PATH refresh expands `%VARS%`.
 
 ### Added
 - Windows: `scripts/bootstrap.ps1`, a one-line entry point that installs Git and Python with winget when missing,

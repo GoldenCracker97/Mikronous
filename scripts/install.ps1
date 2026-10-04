@@ -39,8 +39,27 @@ $Step        = "start"
 function Step($name) { $script:Step = $name; Write-Host "`n==> $name" -ForegroundColor White }
 function Fail($msg)  { Write-Host "   !! $msg" -ForegroundColor Yellow; $Failures.Add("$Step`: $msg") }
 function Refresh-Path {
-  $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
-  $env:Path = (Join-Path $HermesHome "bin") + ";" + (Join-Path $env:APPDATA "Python\Scripts") + ";" + $env:Path
+  # Registry values can hold unexpanded %USERPROFILE% entries; expand them, and keep this session's own PATH
+  # (a tool installed by the bootstrap a moment ago may only be on it).
+  $reg = @([Environment]::GetEnvironmentVariable("Path", "User"), [Environment]::GetEnvironmentVariable("Path", "Machine")) |
+    Where-Object { $_ } | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
+  $env:Path = (@((Join-Path $HermesHome "bin"), (Join-Path $env:APPDATA "Python\Scripts")) + $reg + @($env:Path)) -join ";"
+}
+function Find-Python {
+  # A real Python 3.11+ (never the Microsoft Store stub): py launcher, python on PATH, then the usual install dirs.
+  $cands = @()
+  if (Have py) { try { $p = (& py -3 -c "import sys; print(sys.executable)" 2>$null); if ($LASTEXITCODE -eq 0 -and $p) { $cands += $p.Trim() } } catch { } }
+  $cmd = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*WindowsApps*" } | Select-Object -First 1
+  if ($cmd) { $cands += $cmd.Source }
+  $cands += Get-ChildItem -Path "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe", "$env:ProgramFiles\Python3*\python.exe" -ErrorAction SilentlyContinue |
+    Sort-Object FullName -Descending | ForEach-Object { $_.FullName }
+  foreach ($c in $cands) {
+    try {
+      $v = & $c -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+      if ($LASTEXITCODE -eq 0 -and [version]"$v".Trim() -ge [version]"3.11") { return $c }
+    } catch { }
+  }
+  return $null
 }
 # Only real programs count (PowerShell command lookup is case-insensitive, so a function called `Hermes`
 # used to satisfy `Have hermes` and then call itself until the call stack overflowed).
@@ -165,12 +184,11 @@ if (Have pipx) {
   if (Have mik) { $Mik = (Get-Command mik).Source; Write-Host "installed: mik (pipx)" } else { Fail "pipx install failed" }
 } else {
   $Venv = Join-Path $ConfDir "venv"
-  $py = $null
-  if (Have py) { $py = "py -3" }
-  elseif (Have python) { try { $v = & python --version 2>&1; if ($LASTEXITCODE -eq 0 -and "$v" -match "^Python 3") { $py = "python" } } catch { } }   # skip the Store stub
-  if (-not $py) { Fail "no Python found; install Python 3.11+ from python.org (tick 'Add to PATH') and re-run" }
+  $py = Find-Python
+  if (-not $py) { Fail "no Python 3.11+ found; run: winget install -e --id Python.Python.3.12  (then re-run this installer)" }
   else {
-    Invoke-Expression "$py -m venv `"$Venv`""
+    Write-Host "python: $py"
+    & $py -m venv "$Venv"
     & "$Venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
     & "$Venv\Scripts\python.exe" -m pip install --quiet --editable "$RepoDir$Extras"
     $Mik = "$Venv\Scripts\mik.exe"
@@ -268,10 +286,24 @@ if (-not $profEnv["API_SERVER_PORT"] -or $profEnv["API_SERVER_PORT"] -eq $hostPo
   $content + "API_SERVER_PORT=$apiPort" | Set-Content $EnvDst
   Write-Host "set API_SERVER_PORT=$apiPort in $EnvDst (host gateway owns $hostPort)"
 }
+# Hermes asks "start now?" / "start at login?" on the console (piped answers are ignored), so answer with flags
+# and the matching env vars, and never wait more than a few minutes for it.
+$env:HERMES_GATEWAY_INSTALL_START_NOW = "1"; $env:HERMES_GATEWAY_INSTALL_START_ON_LOGIN = "1"
+function Invoke-HPTimed([string[]]$hpArgs, [int]$seconds) {
+  $exe = HermesExe
+  $p = Start-Process -FilePath $exe -ArgumentList (@("-p", $Profile_) + $hpArgs) -NoNewWindow -PassThru
+  if (-not $p.WaitForExit($seconds * 1000)) {
+    try { $p.Kill() } catch { }
+    throw "'hermes -p $Profile_ $($hpArgs -join ' ')' did not finish within $seconds s"
+  }
+  if ($p.ExitCode -ne 0) { throw "'hermes -p $Profile_ $($hpArgs -join ' ')' exited with $($p.ExitCode)" }
+}
 try {
-  "y`ny`ny`n" | Invoke-HP gateway install | Out-Host
-  "y`ny`n" | Invoke-HP gateway restart | Out-Host
-} catch { Fail "gateway install failed: $($_.Exception.Message); run: hermes -p $Profile_ gateway install" }
+  Invoke-HPTimed @("gateway", "install", "--start-now", "--start-on-login") 300
+} catch { Fail "gateway install: $($_.Exception.Message); run it by hand: hermes -p $Profile_ gateway install" }
+try {
+  Invoke-HPTimed @("gateway", "restart") 120
+} catch { Fail "gateway restart: $($_.Exception.Message); run: hermes -p $Profile_ gateway start" }
 
 # ---------------------------------------------------------------------------
 if (-not $NoTray -and $Mik) {
