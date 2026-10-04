@@ -6,7 +6,7 @@ full toolset: memory, skills, reminders, files, terminal, web and browser. The m
 your own GPU through llama.cpp. Mikronous adds the Linux desktop shell Hermes does not ship:
 a tray app, hotkey chat window, desktop notifications, and desktop tools for the agent.
 
-Release: **v0.1.1** ([changelog](CHANGELOG.md)), verified on a Plasma 5.27 desktop with an RTX 4070 Ti.
+Release: **v0.2.0** ([changelog](CHANGELOG.md)), verified on a Plasma 5.27 desktop with an RTX 4070 Ti.
 
 ![The Mikronous data-slate](docs/screenshot-dataslate.png)
 
@@ -32,7 +32,7 @@ missing, non-interactively):
 
 ```bash
 git clone https://github.com/GoldenCracker97/Mikronous && cd Mikronous
-git checkout v0.1.1
+git checkout v0.2.0
 scripts/install.sh
 mik doctor
 ```

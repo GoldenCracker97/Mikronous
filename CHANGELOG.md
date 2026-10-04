@@ -5,6 +5,8 @@ All notable changes to Mikronous are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-04
+
 ### Added
 - **Network tools**: `lan_devices` (ARP/neighbour table with optional ping sweep and DNS/mDNS names),
   `host_check` (ping + TCP ports), `wake_on_lan` (magic packet); Linux and Windows.
@@ -141,5 +143,6 @@ and llama.cpp on your own GPU.
 - A GPU with 8 GB or more of VRAM recommended (NVIDIA via CUDA prebuilts; AMD/Intel via Vulkan);
   CPU-only works with small models.
 
+[0.2.0]: https://github.com/GoldenCracker97/Mikronous/releases/tag/v0.2.0
 [0.1.1]: https://github.com/GoldenCracker97/Mikronous/releases/tag/v0.1.1
 [0.1.0]: https://github.com/GoldenCracker97/Mikronous/releases/tag/v0.1.0

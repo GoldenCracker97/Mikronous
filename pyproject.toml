@@ -1,6 +1,6 @@
 [project]
 name = "mikronous"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local KDE Plasma desktop assistant powered by Hermes Agent and llama.cpp"
 readme = "README.md"
 requires-python = ">=3.11"
