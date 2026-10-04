@@ -9,7 +9,7 @@ which lowers the pitch and restores normal speed without a phase vocoder.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 try:                          # numpy comes with the optional [voice] extra; the preset list must load without it
     import numpy as np        # (the Settings dialog shows the presets even when voice is not installed)
@@ -25,8 +25,8 @@ class Preset:
     noise_scale: float = 0.667   # Piper prosody variation; lower = flatter, more mechanical
     ring_hz: float = 0.0
     ring_mix: float = 0.0
-    comb_ms: float = 0.0
-    comb_fb: float = 0.0
+    combs: tuple[tuple[float, float], ...] = ()   # (delay_ms, feedback) resonators; inharmonic pairs sound like a metal grille
+    low_shelf_db: float = 0.0    # boost below ~250 Hz: body for the lowered voice
     band: tuple[float, float] | None = None
     crush_bits: int = 0
     crush_hold: int = 1
@@ -37,19 +37,31 @@ class Preset:
 
 
 PRESETS: dict[str, Preset] = {
-    "servitor": Preset("servitor", "servitor — low, metallic, measured", pitch=0.82, noise_scale=0.4, ring_hz=45, ring_mix=0.35,
-                       comb_ms=6.0, comb_fb=0.45, band=(180, 4200), crush_bits=10, clicks=True),
+    "servitor": Preset("servitor", "servitor — deep, metallic, measured", pitch=0.72, noise_scale=0.33, ring_hz=38, ring_mix=0.5,
+                       combs=((6.0, 0.55), (9.7, 0.4)), low_shelf_db=5.0, band=(90, 4200), crush_bits=10, clicks=True),
     "vox-caster": Preset("vox-caster", "vox-caster — narrow radio with static", pitch=0.92, noise_scale=0.5, band=(450, 3000),
                          drive=2.5, hiss=0.012, crackle=0.004, clicks=True),
     "cogitator": Preset("cogitator", "cogitator — crushed, buzzing logic engine", pitch=0.9, noise_scale=0.33, ring_hz=90,
-                        ring_mix=0.3, comb_ms=3.0, comb_fb=0.6, crush_bits=6, crush_hold=3, band=(150, 5000)),
+                        ring_mix=0.3, combs=((3.0, 0.6),), crush_bits=6, crush_hold=3, band=(150, 5000)),
     "none": Preset("none", "none — plain Piper voice"),
 }
 ORDER = ("servitor", "vox-caster", "cogitator", "none")
 
 
-def preset(name: str) -> Preset:
-    return PRESETS.get((name or "").lower(), PRESETS["servitor"])
+def preset(name: str, depth: int = 50, metal: int = 50) -> Preset:
+    """The named preset, adjusted by the Depth and Metal dials (0-100; 50 = as designed)."""
+    p = PRESETS.get((name or "").lower(), PRESETS["servitor"])
+    if p.name == "none":
+        return p
+    d = min(max(int(depth), 0), 100) / 100.0
+    m = min(max(int(metal), 0), 100) / 100.0
+    if d == 0.5 and m == 0.5:
+        return p
+    pitch = min(max(p.pitch * (1.15 - 0.3 * d), 0.5), 1.1)
+    ring_mix = min(p.ring_mix * (0.5 + m), 0.8)
+    combs = tuple((ms, min(fb * (0.6 + 0.8 * m), 0.85)) for ms, fb in p.combs)
+    return replace(p, pitch=pitch, ring_mix=ring_mix, combs=combs,
+                   low_shelf_db=p.low_shelf_db * (0.4 + 1.2 * d))
 
 
 # ----------------------------------------------------------------------------- building blocks (float32 in -1..1)
@@ -86,6 +98,17 @@ def comb(x: np.ndarray, rate: int, delay_ms: float, feedback: float) -> np.ndarr
         end = min(start + d, len(y))
         y[start:end] += feedback * y[start - d:end - d]
     return y / (1 + feedback)
+
+
+def low_shelf(x: np.ndarray, rate: int, db: float, corner: float = 250.0) -> np.ndarray:
+    """Boost below ``corner`` by ``db`` with a smooth one-octave transition."""
+    if db == 0 or len(x) < 8:
+        return x
+    spec = np.fft.rfft(x)
+    freqs = np.fft.rfftfreq(len(x), 1 / rate)
+    t = np.clip((np.log2(np.maximum(freqs, 1.0)) - np.log2(corner / 2)), 0, 1)   # 1 octave ramp below the corner
+    gain = 10 ** ((db * (1 - t)) / 20)
+    return np.fft.irfft(spec * gain, n=len(x)).astype(np.float32)
 
 
 def bandpass(x: np.ndarray, rate: int, lo: float, hi: float) -> np.ndarray:
@@ -141,16 +164,18 @@ def normalize(x: np.ndarray, peak: float = 0.89) -> np.ndarray:
 
 
 # ----------------------------------------------------------------------------- the chain
-def apply(samples: np.ndarray, rate: int, name: str, seed: int = 7) -> np.ndarray:
+def apply(samples: np.ndarray, rate: int, name: str, seed: int = 7, depth: int = 50, metal: int = 50) -> np.ndarray:
     """int16 mono in, int16 mono out. ``none`` returns the input unchanged."""
-    p = preset(name)
+    p = preset(name, depth, metal)
     if p.name == "none":
         return samples
     rng = np.random.default_rng(seed)
     x = to_float(samples)
     x = resample(x, p.pitch)
     x = ring_mod(x, rate, p.ring_hz, p.ring_mix)
-    x = comb(x, rate, p.comb_ms, p.comb_fb)
+    for ms, fb in p.combs:
+        x = comb(x, rate, ms, fb)
+    x = low_shelf(x, rate, p.low_shelf_db)
     if p.band:
         x = bandpass(x, rate, *p.band)
     x = drive(x, p.drive)

@@ -39,5 +39,21 @@ def test_building_blocks():
     crushed = fx.bitcrush(mid, 4, 3)
     assert len(np.unique(np.round(crushed, 6))) <= 2 ** 4 + 1
     assert fx.comb(mid, RATE, 0, 0.5) is mid and fx.ring_mod(mid, RATE, 0, 0) is mid
+    boosted = fx.low_shelf(fx.to_float(tone(100)), RATE, 6.0)
+    assert 20 * np.log10(np.std(boosted) / np.std(fx.to_float(tone(100)))) > 4.5
+    assert abs(20 * np.log10(np.std(fx.low_shelf(mid, RATE, 6.0)) / np.std(mid))) < 1.0
     d = fx.drive(mid, 3.0)
     assert np.max(np.abs(d)) <= 1.0 + 1e-6
+
+
+def test_depth_and_metal_dials():
+    base = fx.preset("servitor")
+    assert fx.preset("servitor", 50, 50) is base and len(base.combs) == 2 and base.pitch == 0.72
+    deep = fx.preset("servitor", 100, 50)
+    assert deep.pitch < base.pitch and deep.low_shelf_db > base.low_shelf_db
+    shiny = fx.preset("servitor", 50, 100)
+    assert shiny.ring_mix > base.ring_mix and all(b[1] > a[1] for a, b in zip(base.combs, shiny.combs))
+    assert all(fb <= 0.85 for _ms, fb in fx.preset("servitor", 100, 100).combs)
+    x = tone(220, 0.5)
+    assert len(fx.apply(x, RATE, "servitor", depth=100)) > len(fx.apply(x, RATE, "servitor", depth=0))
+    assert fx.preset("none", 100, 100).name == "none"

@@ -217,7 +217,8 @@ faster-whisper on your GPU or CPU (choose the model size in Settings; the weight
 Hugging Face, no account). *Voice output* in Settings reads replies aloud with Piper (one voice file,
 downloaded once) through a machine-spirit effect: **servitor** (low, metallic, measured; the default),
 **vox-caster** (narrow radio with static), **cogitator** (crushed, buzzing) or **none**. Pick one in
-Settings and press TEST, or try them from a terminal: `mik say "Rite complete, Magos." --effect cogitator`.
+Settings and press TEST; the **Depth** and **Metal** dials push any preset lower or more metallic (middle = as
+designed). From a terminal: `mik say "Rite complete, Magos." --effect servitor --depth 70 --metal 80`.
 The effects are synthesised on the fly (ring modulator, comb resonator, band-limit, bit-crush, static);
 no sounds are taken from any game. Nothing is sent anywhere.
 

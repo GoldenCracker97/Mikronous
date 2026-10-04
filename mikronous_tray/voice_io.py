@@ -142,10 +142,11 @@ class Recorder:
         return self.path if os.path.exists(self.path) and os.path.getsize(self.path) > 44 else None
 
 
-def render(text: str, path: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT) -> str:
+def render(text: str, path: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT,
+           depth: int = 50, metal: int = 50) -> str:
     """Synthesise ``text`` with Piper into a WAV at ``path``, through the machine-spirit effect chain."""
     from . import voice_fx
-    preset = voice_fx.preset(effect)
+    preset = voice_fx.preset(effect, depth, metal)
     v = _load_tts(voice or DEFAULT_TTS_VOICE)
     cfg = None
     try:
@@ -163,7 +164,7 @@ def render(text: str, path: str, voice: str = DEFAULT_TTS_VOICE, effect: str = D
     import numpy as np
     with wave.open(path, "rb") as w:
         rate, raw = w.getframerate(), w.readframes(w.getnframes())
-    out = voice_fx.apply(np.frombuffer(raw, dtype=np.int16), rate, preset.name)
+    out = voice_fx.apply(np.frombuffer(raw, dtype=np.int16), rate, preset.name, depth=depth, metal=metal)
     with wave.open(path, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -283,7 +284,8 @@ class Speaker:
         self._stop = threading.Event()
         self._token = 0                      # the newest say() wins; older ones stop at their next checkpoint
 
-    def say(self, text: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT) -> None:
+    def say(self, text: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT,
+            depth: int = 50, metal: int = 50) -> None:
         text = " ".join((text or "").split())
         if not text:
             return
@@ -291,7 +293,7 @@ class Speaker:
         token = self._token
         self._stop.clear()
         path = os.path.join(tempfile.gettempdir(), f"mikronous-say-{os.getpid()}-{token}.wav")
-        render(text, path, voice or DEFAULT_TTS_VOICE, effect)
+        render(text, path, voice or DEFAULT_TTS_VOICE, effect, depth, metal)
         if self._stop.is_set() or token != self._token:
             _unlink(path)
             return

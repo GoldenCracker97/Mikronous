@@ -46,6 +46,8 @@ class Prefs:
     tts: bool = False
     tts_voice: str = "en_GB-alan-medium"
     tts_effect: str = "servitor"
+    tts_depth: int = 50
+    tts_metal: int = 50
     semantic: bool = False
 
     def changed_from(self, other: "Prefs") -> list[str]:
@@ -75,12 +77,21 @@ def read() -> Prefs:
     p.tts = bool(st.get("tts", False))
     p.tts_voice = str(st.get("tts_voice") or Prefs.tts_voice)
     p.tts_effect = str(st.get("tts_effect") or Prefs.tts_effect)
+    p.tts_depth = _dial(st.get("tts_depth"))
+    p.tts_metal = _dial(st.get("tts_metal"))
     try:
         from mikronous_cli import embed
         p.semantic = embed.enabled()
     except Exception:  # noqa: BLE001
         p.semantic = False
     return p
+
+
+def _dial(v) -> int:
+    try:
+        return min(max(int(v), 0), 100)
+    except (TypeError, ValueError):
+        return 50
 
 
 def model_name() -> str:
@@ -134,7 +145,7 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
     if "semantic" in changed:
         start_embed_toggle(new.semantic)
     tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang",
-                                                 "hotkey_vox", "stt_model", "tts", "tts_voice", "tts_effect") if k in changed}
+                                                 "hotkey_vox", "stt_model", "tts", "tts_voice", "tts_effect", "tts_depth", "tts_metal") if k in changed}
     if tray_changes:
         settings.save(**tray_changes)
     return changed

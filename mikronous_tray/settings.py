@@ -27,6 +27,8 @@ DEFAULTS = {
     "tts": False,                   # read replies aloud with Piper
     "tts_voice": "en_GB-alan-medium",
     "tts_effect": "servitor",       # machine-spirit effect on read-aloud: servitor | vox-caster | cogitator | none
+    "tts_depth": 50,                # 0-100 dial: lower and fuller voice above 50
+    "tts_metal": 50,                # 0-100 dial: stronger ring-mod and resonance above 50
     "litany": True,                 # boot litany on the first show after start (MIKRONOUS_NO_LITANY=1 overrides)
     "keep_model": False,            # keep llama-server loaded when the tray quits (MIKRONOUS_KEEP_MODEL=1 overrides)
     "sidebar": False,               # past-chats pane open

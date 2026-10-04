@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QTabWidget, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QPushButton, QSlider, QTabWidget, QVBoxLayout, QWidget)
 
 from . import prefs as P
 
@@ -106,6 +106,11 @@ class SettingsDialog(QDialog):
         self.tts_test.clicked.connect(lambda: self._test_voice())
         er.addWidget(self.tts_test)
         form.addRow("Voice effect", effect_row)
+        self.tts_depth = _dial_slider(current.tts_depth)
+        form.addRow("Depth", self.tts_depth)
+        self.tts_metal = _dial_slider(current.tts_metal)
+        form.addRow("Metal", self.tts_metal)
+        form.addRow("", _hint("Middle = the preset as designed. Right = deeper / more metallic. TEST plays your current settings."))
         tts_ok, tts_msg = voice_io.tts_available()
         form.addRow("", _hint("Voice names as on the Piper voices list, e.g. en_US-lessac-medium, en_GB-alba-medium; downloaded once (~60 MB)."
                               if tts_ok else "Not available: " + tts_msg + "."))
@@ -163,7 +168,8 @@ class SettingsDialog(QDialog):
 
     def _test_voice(self) -> None:
         """Speak one line with the voice and effect currently chosen in the dialog (first use downloads the voice)."""
-        _speak_in_background(TEST_LINE, self.tts_voice.text().strip() or self._initial.tts_voice, self.tts_effect.currentData())
+        _speak_in_background(TEST_LINE, self.tts_voice.text().strip() or self._initial.tts_voice, self.tts_effect.currentData(),
+                             self.tts_depth.value(), self.tts_metal.value())
 
     def values(self) -> P.Prefs:
         return P.Prefs(
@@ -183,6 +189,8 @@ class SettingsDialog(QDialog):
             tts=self.tts.isChecked(),
             tts_voice=self.tts_voice.text().strip() or self._initial.tts_voice,
             tts_effect=self.tts_effect.currentData() or self._initial.tts_effect,
+            tts_depth=self.tts_depth.value(),
+            tts_metal=self.tts_metal.value(),
             semantic=self.semantic.isChecked(),
         )
 
@@ -190,13 +198,13 @@ class SettingsDialog(QDialog):
 TEST_LINE = "Rite complete, Magos. The machine spirit is content. All systems nominal."
 
 
-def _speak_in_background(text: str, voice: str, effect: str) -> None:
+def _speak_in_background(text: str, voice: str, effect: str, depth: int = 50, metal: int = 50) -> None:
     import threading
     from . import voice_io
 
     def run():
         try:
-            voice_io.Speaker().say(text, voice, effect)
+            voice_io.Speaker().say(text, voice, effect, depth, metal)
         except Exception as exc:  # noqa: BLE001
             import sys
             print(f"mikronous-tray: voice test failed: {exc}", file=sys.stderr)
@@ -226,6 +234,15 @@ class _PathRow(QWidget):
 
 def _path_row(parent, text: str, directory: bool) -> _PathRow:
     return _PathRow(parent, text, directory)
+
+
+def _dial_slider(value: int) -> QSlider:
+    s = QSlider(Qt.Horizontal)
+    s.setRange(0, 100)
+    s.setValue(int(value))
+    s.setTickInterval(25)
+    s.setTickPosition(QSlider.TicksBelow)
+    return s
 
 
 def _hint(text: str) -> QLabel:

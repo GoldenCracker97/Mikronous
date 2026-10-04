@@ -269,6 +269,8 @@ def test_settings_dialog_values(app):
     d.tts.setChecked(True)
     d.stt_model.setCurrentIndex(2)
     d.tts_effect.setCurrentIndex(d.tts_effect.findData("vox-caster"))
+    d.tts_depth.setValue(75)
+    assert d.values().tts_depth == 75 and d.values().tts_metal == 50
     assert d.values().tts is True and d.values().stt_model == "small" and d.values().tts_effect == "vox-caster"
 
 

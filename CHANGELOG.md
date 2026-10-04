@@ -16,8 +16,9 @@ All notable changes to Mikronous are recorded here. The format follows
 
 ### Added
 - **Machine-spirit voice** for read-aloud: Piper output through a local effect chain with presets servitor (default),
-  vox-caster, cogitator and none; Settings → Voice effect with a TEST button; `mik say "…" --effect …`. The default
-  Piper voice is now `en_GB-alan-medium`.
+  vox-caster, cogitator and none; Settings → Voice effect with a TEST button and Depth/Metal dials; `mik say "…"
+  --effect … --depth … --metal …`. Servitor is deeper (pitch 0.72, low shelf) and more metallic (two comb
+  resonators, stronger ring modulation). The default Piper voice is now `en_GB-alan-medium`.
 - Windows: `scripts/bootstrap.ps1`, a one-line entry point that installs Git and Python with winget when missing,
   clones the repo and runs the installer.
 
