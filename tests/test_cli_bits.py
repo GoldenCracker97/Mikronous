@@ -1,6 +1,9 @@
 """Small CLI and installer checks that need no desktop."""
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -11,6 +14,7 @@ def test_mik_docs_imports_the_plugin_index():
     assert callable(mod.search) and callable(mod.reindex) and hasattr(mod, "embed_enabled")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="bash on the Windows runner is the WSL stub")
 def test_install_sh_shortcut_check_matches_literal_keys():
     snippet = r"""
 HOTKEY="Meta+Space"; SEL="Meta+Shift+Space"

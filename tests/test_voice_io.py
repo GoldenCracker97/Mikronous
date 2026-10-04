@@ -31,7 +31,8 @@ def test_availability_messages(monkeypatch):
 
 
 def test_transcribe_hands_whisper_an_array_not_a_path(tmp_path, monkeypatch):
-    import numpy as np
+    import pytest
+    np = pytest.importorskip("numpy")           # part of the optional [voice] extra
     p = tmp_path / "b.wav"
     with wave.open(str(p), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(8000)
