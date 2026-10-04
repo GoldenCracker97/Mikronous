@@ -38,9 +38,9 @@ class Preset:
 
 
 PRESETS: dict[str, Preset] = {
-    # Tuned by ear on the user's machine (their pick: the old servitor at depth 80 / metal 80), then given a chest.
-    "servitor": Preset("servitor", "servitor — deep, metallic, measured", pitch=0.655, noise_scale=0.33, ring_hz=38, ring_mix=0.65,
-                       combs=((6.0, 0.68), (9.7, 0.50)), low_shelf_db=6.8, chest_db=3.0, band=(70, 4200), crush_bits=10,
+    # Tuned by ear on the user's machine: the old servitor at depth 80 / metal 80, plus a chest, then depth 75 on top.
+    "servitor": Preset("servitor", "servitor — deep, metallic, measured", pitch=0.606, noise_scale=0.33, ring_hz=38, ring_mix=0.65,
+                       combs=((6.0, 0.68), (9.7, 0.50)), low_shelf_db=8.8, chest_db=3.9, band=(70, 4200), crush_bits=10,
                        clicks=True),
     "vox-caster": Preset("vox-caster", "vox-caster — narrow radio with static", pitch=0.92, noise_scale=0.5, band=(450, 3000),
                          drive=2.5, hiss=0.012, crackle=0.004, clicks=True),

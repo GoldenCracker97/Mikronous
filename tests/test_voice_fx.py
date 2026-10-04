@@ -49,7 +49,7 @@ def test_building_blocks():
 def test_depth_and_metal_dials():
     base = fx.preset("servitor")
     assert fx.preset("servitor", 50, 50) is base and len(base.combs) == 2
-    assert (base.pitch, base.ring_mix, base.combs, base.low_shelf_db) == (0.655, 0.65, ((6.0, 0.68), (9.7, 0.50)), 6.8)
+    assert (base.pitch, base.ring_mix, base.combs, base.low_shelf_db) == (0.606, 0.65, ((6.0, 0.68), (9.7, 0.50)), 8.8)
     deep = fx.preset("servitor", 100, 50)
     assert deep.pitch < base.pitch and deep.low_shelf_db > base.low_shelf_db
     shiny = fx.preset("servitor", 50, 100)
