@@ -10,7 +10,12 @@ $ProgressPreference = "SilentlyContinue"
 $Repo = "https://github.com/GoldenCracker97/Mikronous"
 $Dest = Join-Path $HOME "Mikronous"
 
-function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
+function Have($cmd) { [bool](Get-Command $cmd -CommandType Application -ErrorAction SilentlyContinue) }
+function Have-Python {
+  # Windows ships a python.exe stub that only opens the Store; a real interpreter answers --version.
+  if (-not (Have python)) { return $false }
+  try { $v = & python --version 2>&1; return ($LASTEXITCODE -eq 0 -and "$v" -match "^Python 3\.(1[1-9]|[2-9]\d)") } catch { return $false }
+}
 
 function Refresh-Path {
   $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
@@ -19,14 +24,16 @@ function Refresh-Path {
 }
 
 function Ensure-Tool($cmd, $wingetId, $label) {
-  if (Have $cmd) { Write-Host "found: $label"; return }
+  $present = if ($cmd -eq "python") { Have-Python } else { Have $cmd }
+  if ($present) { Write-Host "found: $label"; return }
   if (-not (Have winget)) {
     throw "$label is missing and winget is not available. Install 'App Installer' from the Microsoft Store (that provides winget), or install $label by hand, then re-run."
   }
   Write-Host "installing $label with winget ..."
   & winget install -e --id $wingetId --accept-source-agreements --accept-package-agreements --silent | Out-Null
   Refresh-Path
-  if (-not (Have $cmd)) { throw "$label was installed but '$cmd' is still not on PATH. Open a new PowerShell and re-run this command." }
+  $present = if ($cmd -eq "python") { Have-Python } else { Have $cmd }
+  if (-not $present) { throw "$label was installed but '$cmd' is still not usable on PATH. Open a new PowerShell and re-run this command." }
   Write-Host "installed: $label"
 }
 

@@ -5,6 +5,12 @@ All notable changes to Mikronous are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Windows installer: a helper function named `Hermes` shadowed the real `hermes` command (case-insensitive lookup), so
+  Hermes was reported as "found" when absent and the profile step recursed until "call depth overflow". Wrappers are
+  now `Invoke-Hermes`/`Invoke-HP`, and `Have` only accepts real programs; the Microsoft Store `python.exe` stub is
+  no longer mistaken for Python.
+
 ### Added
 - Windows: `scripts/bootstrap.ps1`, a one-line entry point that installs Git and Python with winget when missing,
   clones the repo and runs the installer.

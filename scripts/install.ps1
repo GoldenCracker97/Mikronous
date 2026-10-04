@@ -42,9 +42,12 @@ function Refresh-Path {
   $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
   $env:Path = (Join-Path $HermesHome "bin") + ";" + (Join-Path $env:APPDATA "Python\Scripts") + ";" + $env:Path
 }
-function Have($cmd) { return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
-function Hermes { & hermes @args }
-function HP { & hermes -p $Profile_ @args }
+# Only real programs count (PowerShell command lookup is case-insensitive, so a function called `Hermes`
+# used to satisfy `Have hermes` and then call itself until the call stack overflowed).
+function Have($cmd) { return [bool](Get-Command $cmd -CommandType Application, ExternalScript -ErrorAction SilentlyContinue) }
+function HermesExe { (Get-Command hermes -CommandType Application, ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
+function Invoke-Hermes { & (HermesExe) @args }
+function Invoke-HP { & (HermesExe) -p $Profile_ @args }
 function Sha($path) { (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower() }
 function Read-Env($path) {
   $h = @{}
@@ -72,7 +75,7 @@ Refresh-Path
 # ---------------------------------------------------------------------------
 Step "Hermes Agent"
 if (Have hermes) {
-  Write-Host "found: $((Get-Command hermes).Source)"
+  Write-Host "found: $(HermesExe)"
 } elseif ($env:MIKRONOUS_SKIP_HERMES_INSTALL -eq "1") {
   throw "hermes not found and MIKRONOUS_SKIP_HERMES_INSTALL=1; install it: iex (irm https://hermes-agent.nousresearch.com/install.ps1)"
 } else {
@@ -81,7 +84,7 @@ if (Have hermes) {
   & ([scriptblock]::Create($installer)) -NonInteractive
   Refresh-Path
   if (-not (Have hermes)) { throw "Hermes installed but 'hermes' is not on PATH; open a new terminal and re-run scripts\install.ps1" }
-  Write-Host "installed: $((Get-Command hermes).Source)"
+  Write-Host "installed: $(HermesExe)"
 }
 
 # ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ $CreatedNow = $false
 if ((Test-Path $ProfileHome) -and ((Test-Path "$ProfileHome\config.yaml") -or (Test-Path "$ProfileHome\SOUL.md") -or (Test-Path "$ProfileHome\.env"))) {
   Write-Host "profile exists at $ProfileHome"
 } else {
-  Hermes profile create $Profile_
+  Invoke-Hermes profile create $Profile_
   if ($LASTEXITCODE -ne 0) { throw "hermes profile create failed" }
   $CreatedNow = $true
 }
@@ -151,7 +154,7 @@ foreach ($pair in @(@($PluginDst, "$RepoDir\hermes_plugin\mikronous"), @($Skills
   New-Item -ItemType Junction -Path $dst -Target $src | Out-Null   # junctions need no developer mode
   Write-Host "linked $dst -> $src"
 }
-HP plugins enable mikronous 2>$null | Out-Null
+Invoke-HP plugins enable mikronous 2>$null | Out-Null
 
 # ---------------------------------------------------------------------------
 Step "mik CLI"
@@ -162,7 +165,9 @@ if (Have pipx) {
   if (Have mik) { $Mik = (Get-Command mik).Source; Write-Host "installed: mik (pipx)" } else { Fail "pipx install failed" }
 } else {
   $Venv = Join-Path $ConfDir "venv"
-  $py = if (Have py) { "py -3" } elseif (Have python) { "python" } else { $null }
+  $py = $null
+  if (Have py) { $py = "py -3" }
+  elseif (Have python) { try { $v = & python --version 2>&1; if ($LASTEXITCODE -eq 0 -and "$v" -match "^Python 3") { $py = "python" } } catch { } }   # skip the Store stub
   if (-not $py) { Fail "no Python found; install Python 3.11+ from python.org (tick 'Add to PATH') and re-run" }
   else {
     Invoke-Expression "$py -m venv `"$Venv`""
@@ -264,8 +269,8 @@ if (-not $profEnv["API_SERVER_PORT"] -or $profEnv["API_SERVER_PORT"] -eq $hostPo
   Write-Host "set API_SERVER_PORT=$apiPort in $EnvDst (host gateway owns $hostPort)"
 }
 try {
-  "y`ny`ny`n" | HP gateway install | Out-Host
-  "y`ny`n" | HP gateway restart | Out-Host
+  "y`ny`ny`n" | Invoke-HP gateway install | Out-Host
+  "y`ny`n" | Invoke-HP gateway restart | Out-Host
 } catch { Fail "gateway install failed: $($_.Exception.Message); run: hermes -p $Profile_ gateway install" }
 
 # ---------------------------------------------------------------------------
