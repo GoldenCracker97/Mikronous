@@ -11,7 +11,7 @@ All notable changes to Mikronous are recorded here. The format follows
   now `Invoke-Hermes`/`Invoke-HP`, and `Have` only accepts real programs; the Microsoft Store `python.exe` stub is
   no longer mistaken for Python.
 - Windows installer: the gateway step waited forever on Hermes's console prompts (piped answers are ignored); it
-  now passes `--start-now --start-on-login`, and both gateway calls have a time limit. Python is located through the
+  now passes `--start-now --start-on-login`, and both gateway calls have a time limit. Their exit codes are read reliably (no false "exited with" failures). Python is located through the
   py launcher, PATH (minus the Store stub) and the standard install folders; PATH refresh expands `%VARS%`.
 
 ### Added

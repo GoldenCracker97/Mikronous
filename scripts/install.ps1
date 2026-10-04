@@ -292,11 +292,13 @@ $env:HERMES_GATEWAY_INSTALL_START_NOW = "1"; $env:HERMES_GATEWAY_INSTALL_START_O
 function Invoke-HPTimed([string[]]$hpArgs, [int]$seconds) {
   $exe = HermesExe
   $p = Start-Process -FilePath $exe -ArgumentList (@("-p", $Profile_) + $hpArgs) -NoNewWindow -PassThru
+  $null = $p.Handle          # without touching the handle first, ExitCode comes back empty after the process ends
   if (-not $p.WaitForExit($seconds * 1000)) {
     try { $p.Kill() } catch { }
     throw "'hermes -p $Profile_ $($hpArgs -join ' ')' did not finish within $seconds s"
   }
-  if ($p.ExitCode -ne 0) { throw "'hermes -p $Profile_ $($hpArgs -join ' ')' exited with $($p.ExitCode)" }
+  $p.WaitForExit()           # flush the exit code
+  if ($null -ne $p.ExitCode -and $p.ExitCode -ne 0) { throw "'hermes -p $Profile_ $($hpArgs -join ' ')' exited with $($p.ExitCode)" }
 }
 try {
   Invoke-HPTimed @("gateway", "install", "--start-now", "--start-on-login") 300
