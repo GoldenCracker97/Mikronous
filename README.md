@@ -215,7 +215,11 @@ in the window and speak; release and the words land in the input box, ready to e
 `Meta+Shift+V` (`Ctrl+Alt+V` on Windows) anywhere to start, and again to stop. Transcription is
 faster-whisper on your GPU or CPU (choose the model size in Settings; the weights download once from
 Hugging Face, no account). *Voice output* in Settings reads replies aloud with Piper (one voice file,
-downloaded once). Nothing is sent anywhere.
+downloaded once) through a machine-spirit effect: **servitor** (low, metallic, measured; the default),
+**vox-caster** (narrow radio with static), **cogitator** (crushed, buzzing) or **none**. Pick one in
+Settings and press TEST, or try them from a terminal: `mik say "Rite complete, Magos." --effect cogitator`.
+The effects are synthesised on the fly (ring modulator, comb resonator, band-limit, bit-crush, static);
+no sounds are taken from any game. Nothing is sent anywhere.
 
 **KRunner.** Press `Alt+Space`, type `mik what time is it in Tokyo`, Enter. The question runs in a
 fresh chat; when the window is hidden the answer comes as a notification (click it to open the slate).

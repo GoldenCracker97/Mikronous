@@ -15,6 +15,9 @@ All notable changes to Mikronous are recorded here. The format follows
   py launcher, PATH (minus the Store stub) and the standard install folders; PATH refresh expands `%VARS%`.
 
 ### Added
+- **Machine-spirit voice** for read-aloud: Piper output through a local effect chain with presets servitor (default),
+  vox-caster, cogitator and none; Settings → Voice effect with a TEST button; `mik say "…" --effect …`. The default
+  Piper voice is now `en_GB-alan-medium`.
 - Windows: `scripts/bootstrap.ps1`, a one-line entry point that installs Git and Python with winget when missing,
   clones the repo and runs the installer.
 

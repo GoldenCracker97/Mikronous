@@ -514,10 +514,11 @@ class ChatWindow(QWidget):
             self._speaker = voice_io.Speaker()
         self._speaker.stop()
         voice = settings.load().get("tts_voice") or voice_io.DEFAULT_TTS_VOICE
+        effect = settings.load().get("tts_effect") or voice_io.DEFAULT_TTS_EFFECT
 
         def run():
             try:
-                self._speaker.say(_plain_text(text), voice)
+                self._speaker.say(_plain_text(text), voice, effect)
             except Exception as exc:  # noqa: BLE001 - say why in the status line, never crash the UI
                 print(f"mikronous-tray: speech failed: {exc}", file=sys.stderr)
         self._tts_thread = threading.Thread(target=run, name="mikronous-tts", daemon=True)

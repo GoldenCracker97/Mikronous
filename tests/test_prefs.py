@@ -36,10 +36,10 @@ def test_apply_writes_each_store(stores):
     new = prefs.Prefs(voice="light", approvals="manual", internet=False, litany=False, keep_model=True,
                       notes_dir="~/Notes", docs_dirs="~/Docs, ~/Projects", hotkey="Ctrl+Shift+M",
                       hotkey_selection="Ctrl+Shift+S", translate_lang="German", hotkey_vox="Ctrl+Shift+V",
-                      stt_model="small", tts=True, tts_voice="en_GB-alba-medium", semantic=False)
+                      stt_model="small", tts=True, tts_voice="en_GB-alba-medium", tts_effect="cogitator", semantic=False)
     changed = prefs.apply(old, new)
     assert set(changed) == {"voice", "approvals", "internet", "litany", "keep_model", "notes_dir", "docs_dirs", "hotkey",
-                            "hotkey_selection", "translate_lang", "hotkey_vox", "stt_model", "tts", "tts_voice"}
+                            "hotkey_selection", "translate_lang", "hotkey_vox", "stt_model", "tts", "tts_voice", "tts_effect"}
     assert prefs.needs_gateway_restart(changed) and not prefs.needs_gateway_restart(["voice", "litany"])
     assert voice.current(stores["soul"].read_text()) == "light" and stores["soul"].read_text().endswith("tail\n")
     assert (stores["cfg"].parent / "soul.sha").exists()

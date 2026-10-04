@@ -92,6 +92,20 @@ class SettingsDialog(QDialog):
         self.tts_voice = QLineEdit(current.tts_voice)
         self.tts_voice.setPlaceholderText(voice_io.DEFAULT_TTS_VOICE)
         form.addRow("Piper voice", self.tts_voice)
+        from . import voice_fx
+        effect_row = QWidget()
+        er = QHBoxLayout(effect_row)
+        er.setContentsMargins(0, 0, 0, 0)
+        self.tts_effect = QComboBox()
+        for key in voice_fx.ORDER:
+            self.tts_effect.addItem(voice_fx.PRESETS[key].label, key)
+        self.tts_effect.setCurrentIndex(max(0, self.tts_effect.findData(current.tts_effect)))
+        er.addWidget(self.tts_effect, 1)
+        self.tts_test = QPushButton("TEST")
+        self.tts_test.setEnabled(voice_io.tts_available()[0])
+        self.tts_test.clicked.connect(lambda: self._test_voice())
+        er.addWidget(self.tts_test)
+        form.addRow("Voice effect", effect_row)
         tts_ok, tts_msg = voice_io.tts_available()
         form.addRow("", _hint("Voice names as on the Piper voices list, e.g. en_US-lessac-medium, en_GB-alba-medium; downloaded once (~60 MB)."
                               if tts_ok else "Not available: " + tts_msg + "."))
@@ -147,6 +161,10 @@ class SettingsDialog(QDialog):
         buttons.addWidget(save)
         root.addLayout(buttons)
 
+    def _test_voice(self) -> None:
+        """Speak one line with the voice and effect currently chosen in the dialog (first use downloads the voice)."""
+        _speak_in_background(TEST_LINE, self.tts_voice.text().strip() or self._initial.tts_voice, self.tts_effect.currentData())
+
     def values(self) -> P.Prefs:
         return P.Prefs(
             voice=self.voice.currentData(),
@@ -164,8 +182,25 @@ class SettingsDialog(QDialog):
             stt_model=self.stt_model.currentData(),
             tts=self.tts.isChecked(),
             tts_voice=self.tts_voice.text().strip() or self._initial.tts_voice,
+            tts_effect=self.tts_effect.currentData() or self._initial.tts_effect,
             semantic=self.semantic.isChecked(),
         )
+
+
+TEST_LINE = "Rite complete, Magos. The machine spirit is content. All systems nominal."
+
+
+def _speak_in_background(text: str, voice: str, effect: str) -> None:
+    import threading
+    from . import voice_io
+
+    def run():
+        try:
+            voice_io.Speaker().say(text, voice, effect)
+        except Exception as exc:  # noqa: BLE001
+            import sys
+            print(f"mikronous-tray: voice test failed: {exc}", file=sys.stderr)
+    threading.Thread(target=run, name="mikronous-voice-test", daemon=True).start()
 
 
 class _PathRow(QWidget):

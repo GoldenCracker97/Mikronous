@@ -268,7 +268,8 @@ def test_settings_dialog_values(app):
     assert v.changed_from(cur) == ["voice", "approvals", "internet", "keep_model", "docs_dirs"]
     d.tts.setChecked(True)
     d.stt_model.setCurrentIndex(2)
-    assert d.values().tts is True and d.values().stt_model == "small"
+    d.tts_effect.setCurrentIndex(d.tts_effect.findData("vox-caster"))
+    assert d.values().tts is True and d.values().stt_model == "small" and d.values().tts_effect == "vox-caster"
 
 
 def test_routines_helpers():

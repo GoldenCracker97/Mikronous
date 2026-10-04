@@ -9,6 +9,7 @@ Subcommands:
   toggle   Show/hide the tray chat window (starts the tray if needed).
   settings Open the tray's Settings dialog.  chats: toggle the past-chats pane.  routines: the Routines tab.
   routine  Scheduled agent tasks from the terminal: list | add | pause | resume | run | remove.
+  say      Speak a line in the machine-spirit voice: mik say "text" [--effect servitor|vox-caster|cogitator|none].
   embed    Semantic file search: on | off | status (a small CPU embedding server on :8082).
   selection  Act on the text highlighted in any app (the Meta+Shift+Space shortcut runs this).
   vox      Start/stop voice input (the Meta+Shift+V shortcut runs this).
@@ -41,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "voice":
         from . import voice
         return voice.main(argv[1:])
+    if argv and argv[0] == "say":
+        from . import say
+        return say.main(argv[1:])
     if argv and argv[0] == "embed":
         from . import embed
         return embed.main(argv[1:])

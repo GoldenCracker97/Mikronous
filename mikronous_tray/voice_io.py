@@ -24,7 +24,8 @@ from pathlib import Path
 IS_WINDOWS = sys.platform == "win32"
 RATE = 16_000
 STT_MODELS = ("tiny", "base", "small", "turbo")
-DEFAULT_TTS_VOICE = "en_US-lessac-medium"
+DEFAULT_TTS_VOICE = "en_GB-alan-medium"        # deep male voice: the base the machine-spirit effects work best on
+DEFAULT_TTS_EFFECT = "servitor"
 PIPER_DIR = Path(os.environ.get("MIKRONOUS_DATA_DIR") or "~/.local/share/mikronous").expanduser() / "piper"
 _stt_lock = threading.Lock()
 _stt_models: dict[str, object] = {}
@@ -141,6 +142,36 @@ class Recorder:
         return self.path if os.path.exists(self.path) and os.path.getsize(self.path) > 44 else None
 
 
+def render(text: str, path: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT) -> str:
+    """Synthesise ``text`` with Piper into a WAV at ``path``, through the machine-spirit effect chain."""
+    from . import voice_fx
+    preset = voice_fx.preset(effect)
+    v = _load_tts(voice or DEFAULT_TTS_VOICE)
+    cfg = None
+    try:
+        from piper.config import SynthesisConfig
+        cfg = SynthesisConfig(length_scale=preset.pitch, noise_scale=preset.noise_scale)  # faster now, lowered later
+    except Exception:  # noqa: BLE001 - older piper-tts: plain synthesis, effects still apply
+        cfg = None
+    with wave.open(path, "wb") as w:
+        if cfg is not None:
+            v.synthesize_wav(text[:2000], w, syn_config=cfg)
+        else:
+            v.synthesize_wav(text[:2000], w)
+    if preset.name == "none":
+        return path
+    import numpy as np
+    with wave.open(path, "rb") as w:
+        rate, raw = w.getframerate(), w.readframes(w.getnframes())
+    out = voice_fx.apply(np.frombuffer(raw, dtype=np.int16), rate, preset.name)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(out.tobytes())
+    return path
+
+
 def _unlink(path: str) -> None:
     try:
         os.remove(path)
@@ -252,17 +283,15 @@ class Speaker:
         self._stop = threading.Event()
         self._token = 0                      # the newest say() wins; older ones stop at their next checkpoint
 
-    def say(self, text: str, voice: str = DEFAULT_TTS_VOICE) -> None:
+    def say(self, text: str, voice: str = DEFAULT_TTS_VOICE, effect: str = DEFAULT_TTS_EFFECT) -> None:
         text = " ".join((text or "").split())
         if not text:
             return
         self._token += 1
         token = self._token
         self._stop.clear()
-        v = _load_tts(voice or DEFAULT_TTS_VOICE)
         path = os.path.join(tempfile.gettempdir(), f"mikronous-say-{os.getpid()}-{token}.wav")
-        with wave.open(path, "wb") as w:
-            v.synthesize_wav(text[:2000], w)
+        render(text, path, voice or DEFAULT_TTS_VOICE, effect)
         if self._stop.is_set() or token != self._token:
             _unlink(path)
             return

@@ -25,7 +25,8 @@ DEFAULTS = {
     "hotkey_screen": "Ctrl+Alt+S",  # Windows: capture the screen and ask (KDE: Meta+Shift+S via installer)
     "stt_model": "base",            # faster-whisper size: tiny | base | small | turbo
     "tts": False,                   # read replies aloud with Piper
-    "tts_voice": "en_US-lessac-medium",
+    "tts_voice": "en_GB-alan-medium",
+    "tts_effect": "servitor",       # machine-spirit effect on read-aloud: servitor | vox-caster | cogitator | none
     "litany": True,                 # boot litany on the first show after start (MIKRONOUS_NO_LITANY=1 overrides)
     "keep_model": False,            # keep llama-server loaded when the tray quits (MIKRONOUS_KEEP_MODEL=1 overrides)
     "sidebar": False,               # past-chats pane open

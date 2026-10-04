@@ -44,7 +44,8 @@ class Prefs:
     hotkey_vox: str = "Ctrl+Alt+V"
     stt_model: str = "base"
     tts: bool = False
-    tts_voice: str = "en_US-lessac-medium"
+    tts_voice: str = "en_GB-alan-medium"
+    tts_effect: str = "servitor"
     semantic: bool = False
 
     def changed_from(self, other: "Prefs") -> list[str]:
@@ -73,6 +74,7 @@ def read() -> Prefs:
     p.stt_model = str(st.get("stt_model") or Prefs.stt_model)
     p.tts = bool(st.get("tts", False))
     p.tts_voice = str(st.get("tts_voice") or Prefs.tts_voice)
+    p.tts_effect = str(st.get("tts_effect") or Prefs.tts_effect)
     try:
         from mikronous_cli import embed
         p.semantic = embed.enabled()
@@ -132,7 +134,7 @@ def apply(old: Prefs, new: Prefs) -> list[str]:
     if "semantic" in changed:
         start_embed_toggle(new.semantic)
     tray_changes = {k: getattr(new, k) for k in ("litany", "keep_model", "notes_dir", "hotkey", "hotkey_selection", "translate_lang",
-                                                 "hotkey_vox", "stt_model", "tts", "tts_voice") if k in changed}
+                                                 "hotkey_vox", "stt_model", "tts", "tts_voice", "tts_effect") if k in changed}
     if tray_changes:
         settings.save(**tray_changes)
     return changed
