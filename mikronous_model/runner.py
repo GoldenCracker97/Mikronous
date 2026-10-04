@@ -24,6 +24,8 @@ from mikronous_cli.platform import IS_WINDOWS, conf_dir
 UNIT = "mikronous-llama.service"
 PID_FILE = conf_dir() / "llama-server.pid"
 LOG_FILE = conf_dir() / "llama-server.log"
+REPO_DIR = Path(__file__).resolve().parent.parent
+USER_UNIT_DIR = Path("~/.config/systemd/user").expanduser()
 
 # A second, CPU-only llama-server provides embeddings for semantic file search (mikronous_cli.embed).
 SERVERS = {
@@ -72,13 +74,38 @@ def answers(timeout: float = 1.5) -> bool:
 
 
 # ----------------------------------------------------------------------------- systemd (Linux)
-def _systemctl(*args: str) -> subprocess.CompletedProcess | None:
+def _systemctl(*args: str, timeout: float = 30) -> subprocess.CompletedProcess | None:
     if not shutil.which("systemctl"):
         return None
     try:
-        return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True, timeout=30)
+        return subprocess.run(["systemctl", "--user", *args], capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def unit_outdated(name: str = "llama", unit_dir: Path = USER_UNIT_DIR) -> bool:
+    """True when the installed systemd unit differs from the repo's copy (or is missing)."""
+    unit = SERVERS[name]["unit"]
+    try:
+        return (unit_dir / unit).read_text(encoding="utf-8") != (REPO_DIR / "systemd" / unit).read_text(encoding="utf-8")
+    except OSError:
+        return True
+
+
+def ensure_unit(name: str = "llama", unit_dir: Path = USER_UNIT_DIR) -> bool:
+    """Install/refresh the unit file from the repo and daemon-reload. Returns True when it changed.
+
+    `mik update` re-runs the installer without the model step, and `mik model use` rewrites llama.env, so without
+    this the unit on disk can lag the flags it must pass (the vision projector went missing exactly this way)."""
+    if IS_WINDOWS or not shutil.which("systemctl"):
+        return False
+    if not unit_outdated(name, unit_dir):
+        return False
+    unit = SERVERS[name]["unit"]
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    (unit_dir / unit).write_text((REPO_DIR / "systemd" / unit).read_text(encoding="utf-8"), encoding="utf-8")
+    _systemctl("daemon-reload")
+    return True
 
 
 # ----------------------------------------------------------------------------- pid file (Windows)
@@ -163,6 +190,7 @@ def start(name: str = "llama") -> bool:
             return False
         srv["pid"].write_text(str(proc.pid))
         return True
+    ensure_unit(name)
     _systemctl("daemon-reload")
     r = _systemctl("start", srv["unit"])
     return bool(r) and r.returncode == 0
@@ -179,7 +207,7 @@ def stop(name: str = "llama") -> bool:
         except OSError:
             pass
         return True
-    r = _systemctl("stop", srv["unit"])
+    r = _systemctl("stop", srv["unit"], timeout=15)
     return bool(r) and r.returncode == 0
 
 
@@ -188,6 +216,7 @@ def restart(name: str = "llama") -> bool:
         stop(name)
         time.sleep(1.0)
         return start(name)
+    ensure_unit(name)
     _systemctl("daemon-reload")
     r = _systemctl("restart", SERVERS[name]["unit"])
     return bool(r) and r.returncode == 0

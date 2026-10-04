@@ -225,6 +225,24 @@ fi
 MIK_BIN="$(command -v mik 2>/dev/null || echo "$HOME/.local/bin/mik")"
 [[ -x "$MIK_BIN" ]] && "$MIK_BIN" model sync-config --no-restart >/dev/null 2>&1 || true
 
+# systemd units are refreshed on EVERY run (the model step above is skipped by `mik update`), and a running
+# server is restarted only when its unit actually changed, so a new flag such as --mmproj takes effect.
+if command -v systemctl >/dev/null 2>&1; then
+  mkdir -p "$UNIT_DIR"
+  for unit in mikronous-llama.service mikronous-embed.service; do
+    [[ "$unit" == mikronous-embed.service && ! -f "$UNIT_DIR/$unit" ]] && continue   # only once `mik embed on` installed it
+    if ! cmp -s "$REPO_DIR/systemd/$unit" "$UNIT_DIR/$unit" 2>/dev/null; then
+      cp "$REPO_DIR/systemd/$unit" "$UNIT_DIR/$unit"
+      systemctl --user daemon-reload
+      if systemctl --user is-active --quiet "$unit"; then
+        systemctl --user restart "$unit" && echo "unit updated and restarted: $unit" || fail "could not restart $unit"
+      else
+        echo "unit updated: $unit"
+      fi
+    fi
+  done
+fi
+
 step "Hermes gateway (API server + cron)"
 # Hermes >= 0.21 runs ONE host gateway (default profile) that serves every profile; the mikronous
 # API server is then mirrored at http://127.0.0.1:<default port>/p/mikronous/v1 and authenticated

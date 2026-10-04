@@ -358,6 +358,16 @@ class TrayApp(QObject):
         self.tray.showMessage("Mikronous", text, QSystemTrayIcon.Information, 4000)
 
     def quit(self) -> None:
+        """Visible at once (window + icon gone), then the slow parts (stop calls, model unload) on the next loop turn."""
+        if getattr(self, "_quitting", False):
+            return
+        self._quitting = True
+        self.window.hide()
+        self.tray.setToolTip("Mikronous — quitting…")
+        self.tray.hide()
+        QTimer.singleShot(0, self._finish_quit)
+
+    def _finish_quit(self) -> None:
         for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
             if hk:
                 hk.unregister()

@@ -672,7 +672,13 @@ class ChatWindow(QWidget):
             self._render()
             return
         self._pending_images.append(str(path))
-        self._set_status(CANT["screen_ready"].format(n=len(self._pending_images)))
+        try:
+            from PySide6.QtGui import QImage
+            img = QImage(str(path))
+            size = f" · {img.width()}×{img.height()}" if not img.isNull() else ""
+        except Exception:  # noqa: BLE001
+            size = ""
+        self._set_status(CANT["screen_ready"].format(n=len(self._pending_images)) + size)
         if not self.input.toPlainText().strip():
             self.input.setPlainText("What's on my screen? ")
             self.input.moveCursor(QTextCursor.End)
@@ -741,7 +747,7 @@ class ChatWindow(QWidget):
                 w.request_stop()
         for t in self.live_threads():
             t.quit()
-            t.wait(3000)
+            t.wait(1000)
 
     @Slot()
     def stop(self) -> None:

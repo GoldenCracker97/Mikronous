@@ -51,6 +51,11 @@ All notable changes to Mikronous are recorded here. The format follows
 - VOX failed with `open() got an unexpected keyword argument 'metadata_errors'` on older PyAV: the recording is now
   decoded with `wave`/numpy and handed to faster-whisper as samples.
 - `mik model sync-config` also sets the per-model `supports_vision` flag; `mik doctor` has a `vision` row.
+- **Vision model ran without its projector**: `mik update` never refreshed the systemd unit, so llama-server kept the
+  old command line and answered every picture with "image input is not supported". Units are now refreshed on every
+  installer run and by `mik model start/restart`; `mik doctor` has a `unit` row and the `vision` row checks the unit.
+  Captures are downscaled to a 1536 px long edge; vision presets reserve 1 GiB for the image encoder; Quit hides the
+  tray at once and finishes its cleanup on the next loop turn with shorter timeouts.
 - Review pass: the UPDATE offer crashed on a non-existent dialog button; Settings → Routines → NEW… crashed (Qt's
   clicked flag landed in the preset argument); `mik docs` and `mik embed on` failed on a relative import; CEASE ended
   every turn in MALFUNCTION; a new turn started while one streamed could abort the tray and bled into the new chat;

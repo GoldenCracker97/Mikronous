@@ -147,16 +147,26 @@ def run_checks() -> list[tuple[str, str, str]]:
         rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
                      else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
 
-    # 7a. Vision: llama.env projector and the profile flag must agree
+    # 7a. systemd unit in step with the repo; vision: llama.env projector, profile flag and unit must agree
     try:
+        from mikronous_model import runner
+        if not IS_WINDOWS and runner.available():
+            stale = runner.unit_outdated("llama")
+            rows.append(("unit", WARN if stale else OK,
+                         "mikronous-llama.service differs from the repo copy — run: mik update (or mik model restart)" if stale
+                         else "mikronous-llama.service matches the repo"))
         mmproj = bool(read_env(LLAMA_ENV).get("LLAMA_MMPROJ", "").strip())
         from . import privacy
         flag = bool(((privacy.load_config() or {}).get("model") or {}).get("supports_vision"))
         if mmproj or flag:
-            rows.append(("vision", OK if mmproj == flag else WARN,
-                         "model sees images; profile knows it" if mmproj and flag else
-                         ("projector loaded but profile says text-only — run: mik model sync-config" if mmproj
-                          else "profile says vision but no projector in llama.env — run: mik model sync-config")))
+            unit_ok = IS_WINDOWS or _unit_has_mmproj()
+            if mmproj and flag and not unit_ok:
+                rows.append(("vision", FAIL, "projector set, but the installed service never passes --mmproj — run: mik model restart"))
+            else:
+                rows.append(("vision", OK if mmproj == flag else WARN,
+                             "model sees images; profile knows it" if mmproj and flag else
+                             ("projector loaded but profile says text-only — run: mik model sync-config" if mmproj
+                              else "profile says vision but no projector in llama.env — run: mik model sync-config")))
     except Exception:  # noqa: BLE001
         pass
 
@@ -226,6 +236,13 @@ def _windows_autostart() -> bool:
             winreg.QueryValueEx(k, "Mikronous")
             return True
     except Exception:  # noqa: BLE001
+        return False
+
+
+def _unit_has_mmproj() -> bool:
+    try:
+        return "LLAMA_MMPROJ" in (Path("~/.config/systemd/user/mikronous-llama.service").expanduser().read_text(encoding="utf-8"))
+    except OSError:
         return False
 
 

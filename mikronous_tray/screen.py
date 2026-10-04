@@ -16,6 +16,7 @@ from pathlib import Path
 from mikronous_cli.platform import data_dir
 
 KEEP = 20
+MAX_EDGE = 1536          # long edge after downscaling: legible text, a fraction of the vision tokens and encoder memory
 
 
 def screens_dir() -> Path:
@@ -52,11 +53,25 @@ def capture(region: bool = True) -> Path | None:
         except (OSError, subprocess.SubprocessError):
             pass
         if out.exists() and out.stat().st_size > 0:
+            downscale(out)
             prune()
             return out
         if region:
             return None                         # the user pressed Esc in the region picker
     return _qt_grab(out)
+
+
+def downscale(path: Path, max_edge: int = MAX_EDGE) -> tuple[int, int]:
+    """Shrink a PNG in place so its long edge is at most ``max_edge``; returns the final size."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+    img = QImage(str(path))
+    if img.isNull():
+        return (0, 0)
+    if max(img.width(), img.height()) > max_edge:
+        img = img.scaled(max_edge, max_edge, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        img.save(str(path), "PNG")
+    return (img.width(), img.height())
 
 
 def start_capture(parent, region: bool, on_done) -> None:
@@ -72,6 +87,7 @@ def start_capture(parent, region: bool, on_done) -> None:
     def finished(_code, _status):
         proc.deleteLater()
         if out.exists() and out.stat().st_size > 0:
+            downscale(out)
             prune()
             on_done(out)
         elif region:
@@ -93,5 +109,6 @@ def _qt_grab(out: Path) -> Path | None:
     pm = screen.grabWindow(0)
     if pm.isNull() or not pm.save(str(out), "PNG"):
         return None
+    downscale(out)
     prune()
     return out

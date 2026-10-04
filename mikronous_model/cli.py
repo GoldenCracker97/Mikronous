@@ -12,6 +12,7 @@ from pathlib import Path
 from mikronous_cli.paths import LLAMA_ENV
 
 from . import apply as apply_mod
+from . import presets as presets_mod
 from . import bench as bench_mod
 from .estimator import HERMES_MIN_CTX, KV_BYTES, Fit, best_fit, cpu_budget, estimate, gpu_budget
 from .gguf import GGUFMeta, hf_resolve_url, read_meta
@@ -207,7 +208,7 @@ def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | No
         real = read_meta(str(path))
         if real.block_count:
             if mmproj_path:
-                real.file_bytes += mmproj_path.stat().st_size
+                real.file_bytes += mmproj_path.stat().st_size + presets_mod.VISION_HEADROOM   # projector + encoder buffers
             meta = real
             fit = best_fit(meta, fit.budget_bytes, target_ctx=getattr(args, "ctx", None) or HERMES_MIN_CTX)
     else:

@@ -15,6 +15,7 @@ from pathlib import Path
 from .gguf import GGUFMeta
 
 GiB = 1024 ** 3
+VISION_HEADROOM = int(1.0 * GiB)    # compute buffers of the image encoder, on top of the projector weights
 
 
 @dataclass
@@ -42,7 +43,8 @@ class Preset:
 
     def meta(self, file_bytes: int | None = None) -> GGUFMeta:
         return GGUFMeta(
-            path=f"hf:{self.repo}", file_bytes=(file_bytes or self.approx_bytes) + self.mmproj_bytes, arch=self.id, name=self.label,
+            path=f"hf:{self.repo}", file_bytes=(file_bytes or self.approx_bytes) + self.mmproj_bytes + (VISION_HEADROOM if self.vision else 0),
+            arch=self.id, name=self.label,
             block_count=self.block_count, head_count=self.head_count, head_count_kv=self.head_count_kv,
             embedding_length=self.head_count * self.head_dim, key_length=self.head_dim, value_length=self.head_dim,
             context_length=self.context_length, expert_count=self.expert_count,

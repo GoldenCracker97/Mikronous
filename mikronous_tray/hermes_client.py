@@ -19,7 +19,7 @@ from mikronous_cli.paths import PROFILE, gateway
 
 CONNECT_TIMEOUT = 5.0
 READ_TIMEOUT = 120.0        # SSE keepalives arrive well inside this
-CONTROL_TIMEOUT = 10.0      # stop / approve / health
+CONTROL_TIMEOUT = 4.0       # stop / approve / health: never let a wedged gateway hold the window
 RUN_TIMEOUT = 1800.0        # hard cap on one turn
 
 
@@ -251,9 +251,16 @@ class HermesClient:
         self._control.close()
 
 
+MAX_IMAGE_BYTES = 6 * 1024 * 1024
+
+
 def image_data_url(path: str) -> str:
     import base64
     import mimetypes
+    import os
+    size = os.path.getsize(path)
+    if size > MAX_IMAGE_BYTES:
+        raise GatewayError(f"image is {size // (1024 * 1024)} MB; captures are downscaled to stay under {MAX_IMAGE_BYTES // (1024 * 1024)} MB")
     mime = mimetypes.guess_type(path)[0] or "image/png"
     with open(path, "rb") as f:
         return f"data:{mime};base64,{base64.b64encode(f.read()).decode('ascii')}"

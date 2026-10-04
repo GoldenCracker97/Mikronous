@@ -567,3 +567,23 @@ def test_offer_update_uses_real_buttons(app, monkeypatch):
     TrayApp._offer_update(Dummy(), {"behind": 1, "commits": ["abc one"]})
     assert ran == [1]
     w.hide()
+
+
+def test_capture_downscale_and_data_url_cap(app, tmp_path):
+    import pytest
+    from PySide6.QtGui import QColor, QImage
+    from mikronous_tray import screen
+    from mikronous_tray.hermes_client import GatewayError, image_data_url
+    big = tmp_path / "big.png"
+    img = QImage(3840, 1600, QImage.Format_RGB32)
+    img.fill(QColor("white"))
+    img.save(str(big), "PNG")
+    assert screen.downscale(big) == (1536, 640)
+    assert QImage(str(big)).width() == 1536 and image_data_url(str(big)).startswith("data:image/png;base64,")
+    small = tmp_path / "small.png"
+    QImage(300, 200, QImage.Format_RGB32).save(str(small), "PNG")
+    assert screen.downscale(small) == (300, 200)                     # untouched
+    huge = tmp_path / "huge.png"
+    huge.write_bytes(b"\x89PNG" + b"\0" * (7 * 1024 * 1024))
+    with pytest.raises(GatewayError):
+        image_data_url(str(huge))
