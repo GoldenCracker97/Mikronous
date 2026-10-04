@@ -368,18 +368,24 @@ class TrayApp(QObject):
         QTimer.singleShot(0, self._finish_quit)
 
     def _finish_quit(self) -> None:
-        for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen):
-            if hk:
-                hk.unregister()
-        if self.krunner:
-            self.krunner.stop()
-        self.window.stop_all()                    # recorder, turn, and every worker thread
-        if self._checker is not None and self._checker.isRunning():
-            self._checker.wait(3000)
-        if self.model.unload_on_quit():
-            self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident
-        self.inbox.stop()
-        self.control.close()
-        QLocalServer.removeServer(settings.CONTROL_SERVER)
-        self.client.close()
+        """Every step is best-effort and logged; the process ends no matter what (hard deadline 25 s)."""
+        import threading
+        import traceback
+        threading.Timer(25.0, lambda: os._exit(0)).start()      # daemon-less by design: this IS the exit
+        steps = [
+            ("hotkeys", lambda: [hk.unregister() for hk in (self.hotkey, self.hotkey_selection, self.hotkey_vox, self.hotkey_screen) if hk]),
+            ("krunner", lambda: self.krunner.stop() if self.krunner else None),
+            ("window", self.window.stop_all),                     # recorder, turn, and every worker thread
+            ("update check", lambda: self._checker.wait(3000) if self._checker is not None and self._checker.isRunning() else None),
+            ("model", lambda: self.model.unload() if self.model.unload_on_quit() else None),   # MIKRONOUS_KEEP_MODEL=1 keeps it
+            ("inbox", self.inbox.stop),
+            ("control socket", lambda: (self.control.close(), QLocalServer.removeServer(settings.CONTROL_SERVER))),
+            ("http client", self.client.close),
+        ]
+        for name, fn in steps:
+            try:
+                fn()
+            except Exception:  # noqa: BLE001 - keep quitting
+                print(f"mikronous-tray: quit step '{name}' failed:\n{traceback.format_exc()}", file=sys.stderr)
         self.app.quit()
+        QTimer.singleShot(1500, lambda: os._exit(0))            # if the loop does not return, leave anyway
