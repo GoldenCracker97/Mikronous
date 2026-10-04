@@ -165,9 +165,19 @@ def _sync_vision_config(vision: bool, restart: bool = True) -> None:
         cfg["model"] = model
         agent = cfg.setdefault("agent", {}) or {}
         cfg["agent"] = agent
-        if bool(model.get("supports_vision")) == vision and agent.get("image_input_mode") == ("native" if vision else "auto"):
+        providers = cfg.setdefault("providers", {}) or {}
+        cfg["providers"] = providers
+        llama = providers.setdefault("llamacpp", {}) or {}
+        providers["llamacpp"] = llama
+        models = llama.setdefault("models", {}) or {}
+        llama["models"] = models
+        per_model = models.setdefault(str(llama.get("model") or "mikronous-local"), {}) or {}
+        models[str(llama.get("model") or "mikronous-local")] = per_model
+        if (bool(model.get("supports_vision")) == vision and bool(per_model.get("supports_vision")) == vision
+                and agent.get("image_input_mode") == ("native" if vision else "auto")):
             return
-        model["supports_vision"] = vision
+        model["supports_vision"] = vision                 # the switch Hermes's API-server path reads
+        per_model["supports_vision"] = vision             # same, per model name (belt and braces)
         agent["image_input_mode"] = "native" if vision else "auto"
         privacy.save_config(cfg)
         print(f"profile config: supports_vision={'true' if vision else 'false'}")

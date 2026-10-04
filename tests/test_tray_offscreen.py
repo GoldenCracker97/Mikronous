@@ -450,3 +450,16 @@ def test_screen_capture_and_image_turn(app, tmp_path, monkeypatch):
     assert fc.image_turn == (w.session_id, "What's on my screen? Which app?", [str(path)])
     assert w._pending_images == [] and any(m["role"] == "user" and m["text"].startswith("[1 screen capture attached]") for m in w.messages)
     assert w.messages[-1]["text"] == "A terminal window."
+
+
+def test_screen_capture_without_vision_does_not_attach(app, tmp_path, monkeypatch):
+    from mikronous_tray import chat_window, screen
+    from mikronous_tray.chat_window import ChatWindow
+    img = tmp_path / "screen-1.png"
+    img.write_bytes(b"png")
+    monkeypatch.setattr(screen, "capture", lambda region=True: img)
+    monkeypatch.setattr(chat_window, "_vision_ready", lambda: False)
+    w = ChatWindow(FakeClient())
+    w._capture_now(False)
+    assert w._pending_images == [] and w.input.toPlainText() == ""
+    assert any(m["role"] == "system" and "recommend --vision" in m["text"] for m in w.messages)

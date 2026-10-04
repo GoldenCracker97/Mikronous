@@ -643,11 +643,14 @@ class ChatWindow(QWidget):
         if path is None:
             self._set_status(CANT["screen_cancelled"])
             return
-        self._pending_images.append(str(path))
-        if not _vision_ready():
+        if not _vision_ready():                      # a text-only model would only get an error-text "description"
+            self._add("system", f"++ CAPTURED {path.name}, BUT THE COGITATOR IS BLIND ++ load a model that sees: "
+                                "mik model recommend --vision --apply   (then capture again)")
             self._set_status(CANT["screen_no_vision"])
-        else:
-            self._set_status(CANT["screen_ready"].format(n=len(self._pending_images)))
+            self._render()
+            return
+        self._pending_images.append(str(path))
+        self._set_status(CANT["screen_ready"].format(n=len(self._pending_images)))
         if not self.input.toPlainText().strip():
             self.input.setPlainText("What's on my screen? ")
             self.input.moveCursor(QTextCursor.End)

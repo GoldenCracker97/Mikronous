@@ -34,3 +34,33 @@ def test_event_lines_and_session_normalisation():
     assert normalize_session_event(RunEvent("error", {"message": "nope"})).name == "run.failed"
     done = normalize_session_event(RunEvent("run.completed", {"final_response": "ok"}))
     assert done.terminal and done.data["output"] == "ok"
+
+
+def test_session_chat_creates_missing_session_and_retries():
+    import json
+    import httpx
+    from mikronous_tray.hermes_client import HermesClient
+    seen = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append((req.method, req.url.path, json.loads(req.content or b"{}")))
+        if req.url.path.endswith("/chat/stream"):
+            if not any(m == "POST" and p == "/api/sessions" for m, p, _ in seen):
+                return httpx.Response(404, json={"error": {"message": "Session not found: tray-x", "code": "session_not_found"}})
+            body = ('event: run.started\ndata: {"run_id": "run_1"}\n\n'
+                    'event: assistant.delta\ndata: {"delta": "A window."}\n\n'
+                    'event: run.completed\ndata: {"final_response": "A window."}\n\n')
+            return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+        if req.url.path == "/api/sessions":
+            return httpx.Response(200, json={"id": "tray-x"})
+        return httpx.Response(500)
+
+    c = HermesClient("http://gw/v1", "k")
+    c._client = httpx.Client(transport=httpx.MockTransport(handler), headers={"Authorization": "Bearer k"})
+    evs = list(c.session_chat_events("tray-x", "What is this?", []))
+    assert [e.name for e in evs] == ["run.started", "message.delta", "run.completed"]
+    posts = [(m, p, b) for m, p, b in seen if p == "/api/sessions"]
+    assert posts == [("POST", "/api/sessions", {"id": "tray-x", "source": "api_server"})]
+    assert sum(1 for _m, p, _b in seen if p.endswith("/chat/stream")) == 2
+    first_body = next(b for m, p, b in seen if p.endswith("/chat/stream"))
+    assert first_body["message"][0] == {"type": "input_text", "text": "What is this?"}

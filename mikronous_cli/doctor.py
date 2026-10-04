@@ -147,6 +147,19 @@ def run_checks() -> list[tuple[str, str, str]]:
         rows.append(("shortcut", OK if key else WARN, f"{key} toggles the chat window" if key
                      else "not registered — run scripts/install.sh (or System Settings > Shortcuts > Mikronous)"))
 
+    # 7a. Vision: llama.env projector and the profile flag must agree
+    try:
+        mmproj = bool(read_env(LLAMA_ENV).get("LLAMA_MMPROJ", "").strip())
+        from . import privacy
+        flag = bool(((privacy.load_config() or {}).get("model") or {}).get("supports_vision"))
+        if mmproj or flag:
+            rows.append(("vision", OK if mmproj == flag else WARN,
+                         "model sees images; profile knows it" if mmproj and flag else
+                         ("projector loaded but profile says text-only — run: mik model sync-config" if mmproj
+                          else "profile says vision but no projector in llama.env — run: mik model sync-config")))
+    except Exception:  # noqa: BLE001
+        pass
+
     # 7b. Semantic search (optional embedding server)
     try:
         from . import embed

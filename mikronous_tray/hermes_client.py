@@ -130,28 +130,43 @@ class HermesClient:
         for p in image_paths:
             parts.append({"type": "input_image", "image_url": image_data_url(p)})
         body = {"message": parts}
+        created = False
         try:
-            with self._client.stream("POST", f"{self.api_root}/api/sessions/{session_id}/chat/stream", json=body,
-                                     headers={"Accept": "text/event-stream"}, timeout=httpx.Timeout(RUN_TIMEOUT, connect=CONNECT_TIMEOUT)) as r:
-                if r.status_code >= 400:
-                    detail = ""
-                    try:
-                        detail = (r.read().decode("utf-8", "replace"))[:300]
-                    except Exception:  # noqa: BLE001
-                        pass
-                    raise GatewayError(f"HTTP {r.status_code} on session chat stream: {detail}")
-                for ev in _parse_sse(r.iter_lines(), should_stop):
-                    if ev is None:
-                        break
-                    norm = normalize_session_event(ev)
-                    if norm is None:
-                        continue
-                    yield norm
-                    if norm.terminal:
-                        return
+            while True:
+                with self._client.stream("POST", f"{self.api_root}/api/sessions/{session_id}/chat/stream", json=body,
+                                         headers={"Accept": "text/event-stream"}, timeout=httpx.Timeout(RUN_TIMEOUT, connect=CONNECT_TIMEOUT)) as r:
+                    if r.status_code >= 400:
+                        detail = ""
+                        try:
+                            detail = (r.read().decode("utf-8", "replace"))[:300]
+                        except Exception:  # noqa: BLE001
+                            pass
+                        if r.status_code == 404 and "session_not_found" in detail and not created:
+                            created = True                 # a fresh tray chat has no row yet; /v1/runs makes one lazily, this path does not
+                            self.ensure_session(session_id)
+                            continue
+                        raise GatewayError(f"HTTP {r.status_code} on session chat stream: {detail}")
+                    for ev in _parse_sse(r.iter_lines(), should_stop):
+                        if ev is None:
+                            break
+                        norm = normalize_session_event(ev)
+                        if norm is None:
+                            continue
+                        yield norm
+                        if norm.terminal:
+                            return
+                break
         except httpx.HTTPError as exc:
             raise GatewayError(f"session chat stream lost: {exc.__class__.__name__}") from exc
         yield RunEvent("run.failed", {"error": "the stream ended without a result"})
+
+    def ensure_session(self, session_id: str) -> None:
+        """Create the session row for an id the tray minted (POST /api/sessions); an existing row is fine."""
+        try:
+            self._json("POST", f"{self.api_root}/api/sessions", json={"id": session_id, "source": "api_server"})
+        except GatewayError as exc:
+            if "409" not in str(exc) and "exists" not in str(exc).lower():
+                raise
 
     # ----------------------------------------------------------------- sessions
     def session_messages(self, session_id: str, limit: int = 200) -> list[dict]:

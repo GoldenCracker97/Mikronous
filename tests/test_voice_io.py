@@ -28,3 +28,26 @@ def test_availability_messages(monkeypatch):
     assert ok is False and ("recorder" in msg or "faster-whisper" in msg)
     ok, msg = V.tts_available()
     assert ok is False and ("player" in msg or "piper" in msg)
+
+
+def test_transcribe_hands_whisper_an_array_not_a_path(tmp_path, monkeypatch):
+    import numpy as np
+    p = tmp_path / "b.wav"
+    with wave.open(str(p), "wb") as w:
+        w.setnchannels(2); w.setsampwidth(2); w.setframerate(8000)
+        w.writeframes(np.full(8000 * 2, 1000, dtype=np.int16).tobytes())        # 1 s stereo at 8 kHz
+    got = {}
+
+    class Seg:
+        text = " hello "
+
+    class Model:
+        def transcribe(self, audio, **kw):
+            got["audio"] = audio; got["kw"] = kw
+            return [Seg()], None
+    monkeypatch.setattr(V, "_load_stt", lambda size: Model())
+    assert V.transcribe(str(p), "base") == "hello"
+    a = got["audio"]
+    assert isinstance(a, np.ndarray) and a.dtype == np.float32 and a.ndim == 1
+    assert abs(len(a) - V.RATE) <= 2 and abs(float(a[100]) - 1000 / 32768) < 1e-3      # mono, resampled to 16 kHz
+    assert got["kw"]["vad_filter"] is True

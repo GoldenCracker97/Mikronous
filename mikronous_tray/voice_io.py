@@ -162,12 +162,31 @@ def _load_stt(size: str):
         return model
 
 
+def wav_samples(path: str):
+    """16 kHz mono float32 samples of our own recordings (no PyAV: faster-whisper's decoder needs a newer
+    ``av`` than some environments have, and we already control the WAV format)."""
+    import numpy as np
+    with wave.open(path, "rb") as w:
+        rate, channels, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        raw = w.readframes(w.getnframes())
+    if width != 2:
+        raise ValueError(f"unexpected sample width {width}")
+    data = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    if rate != RATE:                                   # recorders should honour --rate; resample linearly if not
+        n = int(len(data) * RATE / rate)
+        data = np.interp(np.linspace(0, len(data) - 1, n), np.arange(len(data)), data).astype(np.float32)
+    return data
+
+
 def transcribe(path: str, size: str = "base", language: str | None = None) -> str:
     """Text of a WAV; '' for silence. Raises on missing deps so the UI can say what to install."""
     if wav_seconds(path) < 0.3:
         return ""
+    audio = wav_samples(path)
     model = _load_stt(size if size in STT_MODELS else "base")
-    segments, _info = model.transcribe(path, language=language or None, vad_filter=True, beam_size=1)
+    segments, _info = model.transcribe(audio, language=language or None, vad_filter=True, beam_size=1)
     return " ".join(s.text.strip() for s in segments).strip()
 
 

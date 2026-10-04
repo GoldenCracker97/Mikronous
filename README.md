@@ -198,7 +198,7 @@ model is untouched either way.
 model has vision). Then press `Meta+Shift+S` (`Ctrl+Alt+S` on Windows), the `SCREEN` button or
 `mik screen`: pick a region with Spectacle (the whole screen where Spectacle is missing), the window
 comes back with "What's on my screen?" ready to edit, and the capture is sent with your question to
-the local model. Captures stay in `~/.local/share/mikronous/screens/` (last 20).
+the local model. Before a vision model is loaded, the slate says so and attaches nothing. Captures stay in `~/.local/share/mikronous/screens/` (last 20).
 
 **Voice, fully local.** Install with `scripts/install.sh --voice` (Windows: `-VoiceInput`). Hold **VOX**
 in the window and speak; release and the words land in the input box, ready to edit or send. Or tap

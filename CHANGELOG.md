@@ -45,6 +45,12 @@ All notable changes to Mikronous are recorded here. The format follows
 
 ### Fixed
 - `lan_devices` crashed on IPv6 neighbours in `ip neigh` output.
+- Screen capture on a fresh chat failed with `session_not_found`: the tray now creates the session row before the
+  image turn. A capture taken while a text-only model is loaded is no longer attached (the model would only get an
+  error text); the slate names the command to load a vision model instead.
+- VOX failed with `open() got an unexpected keyword argument 'metadata_errors'` on older PyAV: the recording is now
+  decoded with `wave`/numpy and handed to faster-whisper as samples.
+- `mik model sync-config` also sets the per-model `supports_vision` flag; `mik doctor` has a `vision` row.
 
 ## [0.1.1] - 2026-10-03
 
