@@ -157,16 +157,36 @@ def wav_seconds(path: str) -> float:
 
 
 # ----------------------------------------------------------------------------- transcription
-def _load_stt(size: str):
+_CUDA_BROKEN = {"flag": False}
+
+
+def _cuda_usable() -> bool:
+    """CTranslate2 only loads cuBLAS/cuDNN lazily; probe once so a missing library never surfaces mid-transcription."""
+    if _CUDA_BROKEN["flag"] or os.environ.get("MIKRONOUS_STT_CPU", "") in ("1", "true", "yes"):
+        return False
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _load_stt(size: str, device: str | None = None):
     from faster_whisper import WhisperModel
     with _stt_lock:
-        if size in _stt_models:
-            return _stt_models[size]
-        try:
-            model = WhisperModel(size, device="cuda", compute_type="float16")
-        except Exception:  # noqa: BLE001 - no CUDA libs / no GPU: CPU int8 is fine for short clips
+        key = (size, device or ("cuda" if _cuda_usable() else "cpu"))
+        if key in _stt_models:
+            return _stt_models[key]
+        if key[1] == "cuda":
+            try:
+                model = WhisperModel(size, device="cuda", compute_type="float16")
+            except Exception:  # noqa: BLE001 - no CUDA libs / no GPU: CPU int8 is fine for short clips
+                _CUDA_BROKEN["flag"] = True
+                key = (size, "cpu")
+                model = WhisperModel(size, device="cpu", compute_type="int8")
+        else:
             model = WhisperModel(size, device="cpu", compute_type="int8")
-        _stt_models[size] = model
+        _stt_models[key] = model
         return model
 
 
@@ -193,9 +213,19 @@ def transcribe(path: str, size: str = "base", language: str | None = None) -> st
     if wav_seconds(path) < 0.3:
         return ""
     audio = wav_samples(path)
-    model = _load_stt(size if size in STT_MODELS else "base")
-    segments, _info = model.transcribe(audio, language=language or None, vad_filter=True, beam_size=1)
-    return " ".join(s.text.strip() for s in segments).strip()
+    size = size if size in STT_MODELS else "base"
+    model = _load_stt(size)
+    try:
+        segments, _info = model.transcribe(audio, language=language or None, vad_filter=True, beam_size=1)
+        return " ".join(s.text.strip() for s in segments).strip()
+    except RuntimeError as exc:
+        # cuBLAS/cuDNN missing shows up here, not at load time: switch this process to CPU and try once more.
+        if not any(w in str(exc).lower() for w in ("cublas", "cudnn", "cuda", "library")) or _CUDA_BROKEN["flag"]:
+            raise
+        _CUDA_BROKEN["flag"] = True
+        model = _load_stt(size, device="cpu")
+        segments, _info = model.transcribe(audio, language=language or None, vad_filter=True, beam_size=1)
+        return " ".join(s.text.strip() for s in segments).strip()
 
 
 # ----------------------------------------------------------------------------- speech

@@ -52,3 +52,27 @@ def test_transcribe_hands_whisper_an_array_not_a_path(tmp_path, monkeypatch):
     assert isinstance(a, np.ndarray) and a.dtype == np.float32 and a.ndim == 1
     assert abs(len(a) - V.RATE) <= 2 and abs(float(a[100]) - 1000 / 32768) < 1e-3      # mono, resampled to 16 kHz
     assert got["kw"]["vad_filter"] is True
+
+
+def test_transcribe_falls_back_to_cpu_when_cuda_libs_are_missing(tmp_path, monkeypatch):
+    import pytest
+    np = pytest.importorskip("numpy")
+    p = tmp_path / "c.wav"
+    with wave.open(str(p), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+        w.writeframes(np.full(16000, 500, dtype=np.int16).tobytes())
+    loads = []
+
+    class Seg:
+        text = "ok"
+
+    class Model:
+        def __init__(self, device): self.device = device
+        def transcribe(self, audio, **kw):
+            if self.device == "cuda":
+                raise RuntimeError("Library libcublas.so.12 is not found or cannot be loaded")
+            return [Seg()], None
+    monkeypatch.setattr(V, "_CUDA_BROKEN", {"flag": False})
+    monkeypatch.setattr(V, "_load_stt", lambda size, device=None: (loads.append(device), Model(device or "cuda"))[1])
+    assert V.transcribe(str(p), "base") == "ok"
+    assert loads == [None, "cpu"] and V._CUDA_BROKEN["flag"] is True

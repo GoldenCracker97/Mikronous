@@ -51,6 +51,8 @@ All notable changes to Mikronous are recorded here. The format follows
 - VOX failed with `open() got an unexpected keyword argument 'metadata_errors'` on older PyAV: the recording is now
   decoded with `wave`/numpy and handed to faster-whisper as samples.
 - `mik model sync-config` also sets the per-model `supports_vision` flag; `mik doctor` has a `vision` row.
+- VOX: a missing cuBLAS/cuDNN made transcription fail at run time; CUDA is probed up front and a failure switches
+  whisper to CPU for the rest of the session (`MIKRONOUS_STT_CPU=1` forces CPU).
 - **Vision model ran without its projector**: `mik update` never refreshed the systemd unit, so llama-server kept the
   old command line and answered every picture with "image input is not supported". Units are now refreshed on every
   installer run and by `mik model start/restart`; `mik doctor` has a `unit` row and the `vision` row checks the unit.
