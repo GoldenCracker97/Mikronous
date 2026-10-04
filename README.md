@@ -119,9 +119,19 @@ reminders arrive as Windows toasts, the hotkey is `Ctrl+Alt+Space` (`Win+Space` 
 and the tray autostarts through the per-user Run key. No admin rights are needed. Everything lives under
 `%LOCALAPPDATA%\hermes` and `%LOCALAPPDATA%\mikronous`.
 
+One line, nothing installed beforehand (it fetches Git and Python with winget when missing, clones to
+`%USERPROFILE%\Mikronous` and runs the installer):
+
+```powershell
+irm https://raw.githubusercontent.com/GoldenCracker97/Mikronous/Main/scripts/bootstrap.ps1 | iex
+```
+
+Installer options go through `$env:MIKRONOUS_INSTALL_ARGS = "-NoModel -Voice light"` before that line.
+If you already have Git and Python (open a **new** PowerShell after installing them, so PATH is current):
+
 ```powershell
 git clone https://github.com/GoldenCracker97/Mikronous; cd Mikronous
-powershell -ExecutionPolicy Bypass -File scripts\install.ps1      # -NoModel, -NoTray, -Hotkey "Ctrl+Alt+M", -Voice light
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1      # -NoModel, -NoTray, -Hotkey "Ctrl+Alt+M", -Voice light, -VoiceInput
 mik doctor
 ```
 

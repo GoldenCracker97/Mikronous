@@ -5,6 +5,10 @@ All notable changes to Mikronous are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Windows: `scripts/bootstrap.ps1`, a one-line entry point that installs Git and Python with winget when missing,
+  clones the repo and runs the installer.
+
 ## [0.2.0] - 2026-10-04
 
 ### Added

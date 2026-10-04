@@ -50,6 +50,8 @@ jobs:
         run: |
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Host $_.ToString() }; exit 1 }
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/bootstrap.ps1", [ref]$null, [ref]$errors) | Out-Null
           if ($errors) { $errors | ForEach-Object { Write-Host $_.Message; Write-Host $_.Extent } ; exit 1 }
           Write-Host "install.ps1 parses"
       - name: Tests
