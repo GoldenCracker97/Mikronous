@@ -48,7 +48,8 @@ def test_building_blocks():
 
 def test_depth_and_metal_dials():
     base = fx.preset("servitor")
-    assert fx.preset("servitor", 50, 50) is base and len(base.combs) == 2 and base.pitch == 0.72
+    assert fx.preset("servitor", 50, 50) is base and len(base.combs) == 2
+    assert (base.pitch, base.ring_mix, base.combs, base.low_shelf_db) == (0.655, 0.65, ((6.0, 0.68), (9.7, 0.50)), 6.8)
     deep = fx.preset("servitor", 100, 50)
     assert deep.pitch < base.pitch and deep.low_shelf_db > base.low_shelf_db
     shiny = fx.preset("servitor", 50, 100)
@@ -57,3 +58,17 @@ def test_depth_and_metal_dials():
     x = tone(220, 0.5)
     assert len(fx.apply(x, RATE, "servitor", depth=100)) > len(fx.apply(x, RATE, "servitor", depth=0))
     assert fx.preset("none", 100, 100).name == "none"
+
+
+def test_depth_adds_low_energy_on_a_voice_like_signal():
+    t = np.arange(int(RATE * 0.6)) / RATE
+    voice = sum((0.3 / k) * np.sin(2 * np.pi * 140 * k * t) for k in range(1, 12))      # harmonic stack at 140 Hz
+    x = (voice / np.max(np.abs(voice)) * 20000).astype(np.int16)
+
+    def low_share(y):
+        spec = np.abs(np.fft.rfft(y.astype(np.float32)))
+        freqs = np.fft.rfftfreq(len(y), 1 / RATE)
+        return spec[freqs < 200].sum() / spec.sum()
+    mid, deep = fx.apply(x, RATE, "servitor", depth=50), fx.apply(x, RATE, "servitor", depth=100)
+    assert len(deep) > len(mid) and low_share(deep) > low_share(mid)
+    assert fx.chest(fx.to_float(x), RATE, 0) is not None
