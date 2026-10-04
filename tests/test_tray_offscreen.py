@@ -588,3 +588,26 @@ def test_capture_downscale_and_data_url_cap(app, tmp_path):
     huge.write_bytes(b"\x89PNG" + b"\0" * (7 * 1024 * 1024))
     with pytest.raises(GatewayError):
         image_data_url(str(huge))
+
+
+def test_settings_dialog_opens_without_numpy(app, monkeypatch):
+    import builtins
+    import importlib
+    import sys
+    from mikronous_tray import prefs
+    real_import = builtins.__import__
+
+    def no_numpy(name, *a, **k):
+        if name == "numpy" or name.startswith("numpy."):
+            raise ImportError("no numpy")
+        return real_import(name, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", no_numpy)
+    monkeypatch.delitem(sys.modules, "mikronous_tray.voice_fx", raising=False)
+    import mikronous_tray.voice_fx as fx
+    importlib.reload(fx)
+    assert fx.np is None and "servitor" in fx.PRESETS
+    from mikronous_tray.settings_dialog import SettingsDialog
+    d = SettingsDialog(None, prefs.Prefs())
+    assert d.tts_effect.count() == 4
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    importlib.reload(fx)

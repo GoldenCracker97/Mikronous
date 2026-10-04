@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
+try:                          # numpy comes with the optional [voice] extra; the preset list must load without it
+    import numpy as np        # (the Settings dialog shows the presets even when voice is not installed)
+except ImportError:  # pragma: no cover - exercised on installs without the extra
+    np = None
 
 
 @dataclass(frozen=True)
