@@ -21,7 +21,10 @@ WITH_MODEL=1
 WITH_TRAY=1
 # --voice is remembered (marker file) so `mik update`, which re-runs this script, keeps the voice extras.
 VOICE_MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/mikronous/voice.enabled"
-WITH_VOICE="${MIKRONOUS_VOICE:-$([[ -f "$VOICE_MARKER" ]] && echo 1 || echo 0)}"
+WITH_VOICE="${MIKRONOUS_VOICE_INPUT:-$([[ -f "$VOICE_MARKER" ]] && echo 1 || echo 0)}"
+# The tray choice is remembered the same way, so `mik update` (which passes --no-tray to skip the desktop
+# setup) still reinstalls mik WITH the PySide6 extra instead of silently dropping it.
+TRAY_MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/mikronous/tray.enabled"
 FAILURES=()
 for arg in "$@"; do
   case "$arg" in
@@ -159,8 +162,9 @@ install_mik_venv() {
   mkdir -p "$HOME/.local/bin" && ln -sfn "$venv/bin/mik" "$HOME/.local/bin/mik"
 }
 # The tray app needs PySide6 (~150 MB); it is an optional extra so headless installs stay small.
-MIK_EXTRAS=""; [[ "$WITH_TRAY" == 1 ]] && MIK_EXTRAS="[tray]"
-[[ "$WITH_TRAY" == 1 && "$WITH_VOICE" == 1 ]] && { MIK_EXTRAS="[tray,voice]"; mkdir -p "$(dirname "$VOICE_MARKER")"; touch "$VOICE_MARKER"; }
+WANT_TRAY="$WITH_TRAY"; [[ -f "$TRAY_MARKER" ]] && WANT_TRAY=1
+MIK_EXTRAS=""; [[ "$WANT_TRAY" == 1 ]] && MIK_EXTRAS="[tray]"
+[[ "$WANT_TRAY" == 1 && "$WITH_VOICE" == 1 ]] && { MIK_EXTRAS="[tray,voice]"; mkdir -p "$(dirname "$VOICE_MARKER")"; touch "$VOICE_MARKER"; }
 if command -v uv >/dev/null 2>&1; then
   (cd "$REPO_DIR" && uv tool install --force --editable ".$MIK_EXTRAS" >/dev/null 2>&1) && echo "installed: mik (uv tool)" || fail "uv tool install failed"
 elif command -v pipx >/dev/null 2>&1; then
@@ -290,7 +294,9 @@ if [[ "$WITH_TRAY" == 1 ]]; then
   step "Tray app (Meta+Space chat window)"
   if command -v mik >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/mik" ]]; then
     MIK="$(command -v mik || echo "$HOME/.local/bin/mik")"
-    if "$MIK" tray --help >/dev/null 2>&1; then
+    if "$MIK" tray --render-icon "$CONF_DIR/.probe.png" >/dev/null 2>&1; then   # really imports PySide6
+      rm -f "$CONF_DIR/.probe.png"
+      mkdir -p "$(dirname "$TRAY_MARKER")"; touch "$TRAY_MARKER"
       APPS="$HOME/.local/share/applications"; ICONS="$HOME/.local/share/icons/hicolor/scalable/apps"
       mkdir -p "$APPS" "$ICONS" "$HOME/.config/autostart"
       sed "s|^Exec=mik |Exec=$MIK |" "$REPO_DIR/packaging/mikronous.desktop" > "$APPS/mikronous.desktop"
@@ -338,8 +344,10 @@ if [[ "$WITH_TRAY" == 1 ]]; then
       }
       if [[ -n "$KW" ]]; then
         SECTION="$(sed -n '/\[mikronous.desktop\]/,/^\[/p' "$HOME/.config/kglobalshortcutsrc" 2>/dev/null)"
-        if ! grep -qE "^_launch=$HOTKEY(,|$)" <<<"$SECTION" || ! grep -qE "^selection=$HOTKEY_SEL(,|$)" <<<"$SECTION" \
-           || ! grep -qE "^vox=$HOTKEY_VOX(,|$)" <<<"$SECTION" || ! grep -qE "^screen=$HOTKEY_SCREEN(,|$)" <<<"$SECTION"; then
+        # Keys are regex-escaped: a bare "Meta+Space" would read "Met", one or more "a", "Space" and never match,
+        # so every run used to restart kglobalaccel and overwrite the user's own key choices.
+        if ! grep -qE "^_launch=${HOTKEY//+/\\+}(,|$)" <<<"$SECTION" || ! grep -qE "^selection=${HOTKEY_SEL//+/\\+}(,|$)" <<<"$SECTION" \
+           || ! grep -qE "^vox=${HOTKEY_VOX//+/\\+}(,|$)" <<<"$SECTION" || ! grep -qE "^screen=${HOTKEY_SCREEN//+/\\+}(,|$)" <<<"$SECTION"; then
           # The daemon writes its in-memory table to the file when it stops, so stop it BEFORE writing.
           if systemctl --user is-active --quiet plasma-kglobalaccel.service 2>/dev/null; then
             systemctl --user stop plasma-kglobalaccel.service; sleep 1
@@ -350,8 +358,8 @@ if [[ "$WITH_TRAY" == 1 ]]; then
               || { command -v kquitapp5 >/dev/null 2>&1 && kquitapp5 kglobalaccel5 >/dev/null 2>&1; } || true
             sleep 1
             write_hotkey
-            (command -v kglobalaccel6 >/dev/null 2>&1 && setsid kglobalaccel6 >/dev/null 2>&1 &) \
-              || (command -v kglobalaccel5 >/dev/null 2>&1 && setsid kglobalaccel5 >/dev/null 2>&1 &) || true
+            if command -v kglobalaccel6 >/dev/null 2>&1; then (setsid kglobalaccel6 >/dev/null 2>&1 &)
+            elif command -v kglobalaccel5 >/dev/null 2>&1; then (setsid kglobalaccel5 >/dev/null 2>&1 &); fi
           fi
         fi
         echo "shortcut: $HOTKEY opens the chat window; $HOTKEY_SEL acts on selected text; $HOTKEY_VOX voice input; $HOTKEY_SCREEN ask about the screen (System Settings > Shortcuts > Mikronous, or MIKRONOUS_HOTKEY= / _SELECTION= / _VOX= / _SCREEN=)"

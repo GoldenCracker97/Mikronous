@@ -19,6 +19,7 @@ from mikronous_cli.paths import PROFILE, gateway
 
 CONNECT_TIMEOUT = 5.0
 READ_TIMEOUT = 120.0        # SSE keepalives arrive well inside this
+CONTROL_TIMEOUT = 10.0      # stop / approve / health
 RUN_TIMEOUT = 1800.0        # hard cap on one turn
 
 
@@ -50,11 +51,14 @@ class HermesClient:
         self.api_key = api_key
         self._client = httpx.Client(timeout=httpx.Timeout(READ_TIMEOUT, connect=CONNECT_TIMEOUT),
                                     headers={"Authorization": f"Bearer {api_key}"})
+        # Control calls (stop, approve, health) must never hang the window behind a wedged turn.
+        self._control = httpx.Client(timeout=httpx.Timeout(CONTROL_TIMEOUT, connect=CONNECT_TIMEOUT),
+                                     headers={"Authorization": f"Bearer {api_key}"})
 
     # ----------------------------------------------------------------- helpers
-    def _json(self, method: str, url: str, **kw) -> dict:
+    def _json(self, method: str, url: str, *, control: bool = False, **kw) -> dict:
         try:
-            r = self._client.request(method, url, **kw)
+            r = (self._control if control else self._client).request(method, url, **kw)
         except httpx.HTTPError as exc:
             raise GatewayError(f"gateway unreachable ({exc.__class__.__name__}); run `mik doctor`") from exc
         if r.status_code >= 400:
@@ -79,13 +83,13 @@ class HermesClient:
         return self._json("GET", f"{self.v1}/runs/{run_id}")
 
     def stop(self, run_id: str) -> None:
-        self._json("POST", f"{self.v1}/runs/{run_id}/stop")
+        self._json("POST", f"{self.v1}/runs/{run_id}/stop", control=True)
 
     def approve(self, run_id: str, choice: str, request_id: str | None = None) -> None:
         body: dict[str, Any] = {"choice": choice}
         if request_id:
             body["request_id"] = request_id
-        self._json("POST", f"{self.v1}/runs/{run_id}/approval", json=body)
+        self._json("POST", f"{self.v1}/runs/{run_id}/approval", json=body, control=True)
 
     def events(self, run_id: str, *, should_stop: Callable[[], bool] | None = None) -> Iterator[RunEvent]:
         """Yield events until a terminal one (or the stream closes). Reconnects with Last-Event-ID."""
@@ -109,7 +113,10 @@ class HermesClient:
                         yield ev
                         if ev.terminal:
                             return
-                    if closed or (should_stop and should_stop()):
+                    if should_stop and should_stop():
+                        yield RunEvent("run.cancelled", {"output": ""})     # the user pressed CEASE; no poll needed
+                        return
+                    if closed:
                         break
             except httpx.ReadTimeout:
                 continue                       # keepalive gap; reconnect from last_seq
@@ -118,7 +125,8 @@ class HermesClient:
         # Stream closed without a terminal event (e.g. buffer expired): fall back to polling.
         status = self.run_status(run_id)
         st = status.get("status", "failed")
-        name = {"completed": "run.completed", "cancelled": "run.cancelled", "interrupted": "run.interrupted"}.get(st, "run.failed")
+        name = {"completed": "run.completed", "cancelled": "run.cancelled", "stopping": "run.cancelled",
+                "interrupted": "run.interrupted"}.get(st, "run.failed")
         yield RunEvent(name, status)
 
     # ----------------------------------------------------------------- session chat with images
@@ -146,15 +154,24 @@ class HermesClient:
                             self.ensure_session(session_id)
                             continue
                         raise GatewayError(f"HTTP {r.status_code} on session chat stream: {detail}")
+                    final_text = ""
                     for ev in _parse_sse(r.iter_lines(), should_stop):
                         if ev is None:
                             break
+                        if ev.name == "assistant.completed":          # the only place the final text travels
+                            final_text = str(ev.data.get("content") or ev.data.get("text") or "")
+                            continue
                         norm = normalize_session_event(ev)
                         if norm is None:
                             continue
+                        if norm.terminal and not norm.data.get("output"):
+                            norm.data["output"] = final_text
                         yield norm
                         if norm.terminal:
                             return
+                    if should_stop and should_stop():
+                        yield RunEvent("run.cancelled", {"output": final_text})
+                        return
                 break
         except httpx.HTTPError as exc:
             raise GatewayError(f"session chat stream lost: {exc.__class__.__name__}") from exc
@@ -225,12 +242,13 @@ class HermesClient:
 
     def health(self) -> dict:
         try:
-            return self._json("GET", f"{self.v1}/models")
+            return self._json("GET", f"{self.v1}/models", control=True)
         except GatewayError as exc:
             return {"error": str(exc)}
 
     def close(self) -> None:
         self._client.close()
+        self._control.close()
 
 
 def image_data_url(path: str) -> str:
@@ -256,7 +274,8 @@ def normalize_session_event(ev: RunEvent) -> RunEvent | None:
         return RunEvent(name, d)
     if name in ("run.completed", "run.failed", "run.cancelled", "run.interrupted"):
         out = d.get("final_response") or d.get("output") or ""
-        return RunEvent(name, {**d, "output": out})
+        err = d.get("error") or d.get("turn_exit_reason") or ""
+        return RunEvent(name, {**d, "output": out, **({"error": err} if err and name != "run.completed" else {})})
     if name == "error":
         return RunEvent("run.failed", {"error": d.get("message") or "the run failed"})
     return None            # message.started, tool.progress, assistant.completed, done

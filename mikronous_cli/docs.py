@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 import time
 from pathlib import Path
@@ -11,14 +10,13 @@ REPO_DIR = Path(__file__).resolve().parent.parent
 
 
 def _docs_index():
-    """Import hermes_plugin/mikronous/docs_index.py standalone (the plugin is not a Python package of ours)."""
-    path = REPO_DIR / "hermes_plugin" / "mikronous" / "docs_index.py"
-    spec = importlib.util.spec_from_file_location("mikronous_docs_index", path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[spec.name] = mod  # dataclasses need the module registered before the body runs
-    spec.loader.exec_module(mod)
-    return mod
+    """Import the plugin's docs_index as part of the ``mikronous`` package (it uses relative imports), the same
+    way the tests do: hermes_plugin/ goes on sys.path. Nothing else of ours is called ``mikronous``."""
+    plugin_root = str(REPO_DIR / "hermes_plugin")
+    if plugin_root not in sys.path:
+        sys.path.insert(0, plugin_root)
+    from mikronous import docs_index  # type: ignore
+    return docs_index
 
 
 def main(argv: list[str]) -> int:

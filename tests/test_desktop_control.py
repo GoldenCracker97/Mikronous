@@ -42,6 +42,7 @@ def test_volume_flow_with_wpctl(shell, monkeypatch):
     assert calls[-1][-1] == "1.00"
     assert dc.system_control({"action": "volume_up"}) == {"ok": True, "volume": 50}
     assert dc.system_control({"action": "volume_down", "value": 15}) == {"ok": True, "volume": 25}
+    assert dc.system_control({"action": "volume_up", "value": "a bit"}) == {"ok": True, "volume": 50}   # junk step -> default 10
     assert dc.system_control({"action": "mute"}) == {"ok": True, "muted": True} and calls[-1][-1] == "1"
     assert "error" in dc.system_control({"action": "volume_set", "value": "loud"})
     assert "error" in dc.system_control({"action": "reboot"})
@@ -66,7 +67,8 @@ def test_dnd_lock_focus(shell, monkeypatch):
     calls, outputs = shell
     monkeypatch.setattr(dc, "_has", lambda t: t in ("kwriteconfig5", "loginctl", "xdotool"))
     res = dc.system_control({"action": "dnd_on", "value": 30})
-    assert res["ok"] and "until" in res and calls[-1][:5] == ["kwriteconfig5", "--file", "plasmanotifyrc", "--group", "DoNotDisturb"]
+    assert res["ok"] and "until" in res and calls[-1][:6] == ["kwriteconfig5", "--notify", "--file", "plasmanotifyrc", "--group", "DoNotDisturb"]
+    assert calls[-1][-1].count(",") == 5 and not any(part.startswith("0") and len(part) > 1 for part in calls[-1][-1].split(","))
     assert dc.system_control({"action": "dnd_off"})["ok"] and calls[-1][-1] == "--delete"
     assert dc.system_control({"action": "lock"}) == {"ok": True, "via": "loginctl"}
     outputs["search --name Firefox"] = (0, "123\n456\n")

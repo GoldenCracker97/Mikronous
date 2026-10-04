@@ -33,25 +33,26 @@ _tts_voices: dict[str, object] = {}
 
 
 # ----------------------------------------------------------------------------- availability
-def stt_available() -> tuple[bool, str]:
+def _installed(module: str) -> bool:
+    import importlib.util
     try:
-        import faster_whisper  # noqa: F401
-    except ImportError:
+        return importlib.util.find_spec(module) is not None       # no import: a cold faster_whisper import takes seconds
+    except (ImportError, ValueError):
+        return False
+
+
+def stt_available() -> tuple[bool, str]:
+    if not _installed("faster_whisper"):
         return False, "faster-whisper is not installed (scripts/install.sh --voice)"
     if not IS_WINDOWS and recorder_command("x.wav") is None:
         return False, "no recorder found (pw-record, parecord or arecord)"
-    if IS_WINDOWS:
-        try:
-            import sounddevice  # noqa: F401
-        except Exception as exc:  # noqa: BLE001
-            return False, f"sounddevice unavailable: {exc}"
+    if IS_WINDOWS and not _installed("sounddevice"):
+        return False, "sounddevice is not installed (scripts/install.ps1 -VoiceInput)"
     return True, "ready"
 
 
 def tts_available() -> tuple[bool, str]:
-    try:
-        import piper  # noqa: F401
-    except ImportError:
+    if not _installed("piper"):
         return False, "piper-tts is not installed (scripts/install.sh --voice)"
     if not IS_WINDOWS and player_command("x.wav") is None:
         return False, "no player found (paplay, pw-play or aplay)"
@@ -140,6 +141,13 @@ class Recorder:
         return self.path if os.path.exists(self.path) and os.path.getsize(self.path) > 44 else None
 
 
+def _unlink(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 def wav_seconds(path: str) -> float:
     try:
         with wave.open(path, "rb") as w:
@@ -212,17 +220,21 @@ class Speaker:
     def __init__(self):
         self._proc: subprocess.Popen | None = None
         self._stop = threading.Event()
+        self._token = 0                      # the newest say() wins; older ones stop at their next checkpoint
 
     def say(self, text: str, voice: str = DEFAULT_TTS_VOICE) -> None:
         text = " ".join((text or "").split())
         if not text:
             return
+        self._token += 1
+        token = self._token
         self._stop.clear()
         v = _load_tts(voice or DEFAULT_TTS_VOICE)
-        path = os.path.join(tempfile.gettempdir(), f"mikronous-say-{os.getpid()}.wav")
+        path = os.path.join(tempfile.gettempdir(), f"mikronous-say-{os.getpid()}-{token}.wav")
         with wave.open(path, "wb") as w:
             v.synthesize_wav(text[:2000], w)
-        if self._stop.is_set():
+        if self._stop.is_set() or token != self._token:
+            _unlink(path)
             return
         if IS_WINDOWS:
             import sounddevice as sd
@@ -236,10 +248,14 @@ class Speaker:
             return
         cmd = player_command(path)
         if cmd is None:
+            _unlink(path)
             return
-        self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self._proc.wait()
-        self._proc = None
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._proc = proc
+        proc.wait()
+        if self._proc is proc:
+            self._proc = None
+        _unlink(path)
 
     def stop(self) -> None:
         self._stop.set()

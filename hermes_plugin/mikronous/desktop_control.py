@@ -97,11 +97,11 @@ def media_control(args: dict, **_: Any) -> dict:
     if action not in ("play", "pause", "toggle", "stop", "next", "previous", "status"):
         return {"error": "action must be one of play, pause, toggle, stop, next, previous, status"}
     if IS_WINDOWS:
-        key = {"toggle": 179, "play": 179, "pause": 179, "stop": 178, "next": 176, "previous": 177}.get(action)
-        if key is None:
+        vk = {"toggle": 0xB3, "play": 0xB3, "pause": 0xB3, "stop": 0xB2, "next": 0xB0, "previous": 0xB1}.get(action)
+        if vk is None:
             return {"error": "status is not available on Windows; use play/pause/next/previous"}
-        rc, out = _ps(f"(New-Object -ComObject WScript.Shell).SendKeys([char]{key})")
-        return {"ok": rc == 0, "action": action, "via": "media key"} if rc == 0 else {"error": out.strip()[:200]}
+        err = _win_key(vk)
+        return {"ok": True, "action": action, "via": "media key"} if not err else {"error": err}
     players = _players()
     if not players:
         return {"error": "no media player is running (nothing on MPRIS)"}
@@ -176,18 +176,30 @@ def _mute(state: str) -> dict:   # "1" | "0" | "toggle"
     return {"ok": True, "muted": {"1": True, "0": False}.get(state)} if rc == 0 else {"error": out.strip()[:200]}
 
 
+def _win_key(vk: int, times: int = 1) -> str:
+    """Press a virtual key (media/volume keys) through user32; '' on success, else the error."""
+    try:
+        import ctypes
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        for _ in range(times):
+            user32.keybd_event(vk, 0, 0x0001, 0)            # KEYEVENTF_EXTENDEDKEY
+            user32.keybd_event(vk, 0, 0x0003, 0)            # ... | KEYEVENTF_KEYUP
+        return ""
+    except Exception as exc:  # noqa: BLE001
+        return f"could not press the key: {exc}"
+
+
 def _volume_windows(action: str, pct: int | None) -> dict:
-    shell = "$s = New-Object -ComObject WScript.Shell; "
+    # Each volume key press is one step (2 %). No read-back without the audio COM API.
     if action == "mute":
-        rc, out = _ps(shell + "$s.SendKeys([char]173)")
-        return {"ok": rc == 0, "note": "mute toggled (Windows has no read-back here)"} if rc == 0 else {"error": out[:200]}
+        err = _win_key(0xAD)
+        return {"ok": True, "note": "mute toggled (Windows cannot report the state here)"} if not err else {"error": err}
     if action in ("volume_up", "volume_down"):
-        key = 175 if action == "volume_up" else 174
-        rc, out = _ps(shell + f"1..5 | % {{ $s.SendKeys([char]{key}) }}")
-        return {"ok": rc == 0, "step": "10%"} if rc == 0 else {"error": out[:200]}
+        err = _win_key(0xAF if action == "volume_up" else 0xAE, 5)
+        return {"ok": True, "step": "10%"} if not err else {"error": err}
     if action == "volume_set" and pct is not None:
-        rc, out = _ps(shell + f"1..50 | % {{ $s.SendKeys([char]174) }}; 1..{pct // 2} | % {{ $s.SendKeys([char]175) }}")
-        return {"ok": rc == 0, "volume": pct - pct % 2} if rc == 0 else {"error": out[:200]}
+        err = _win_key(0xAE, 50) or _win_key(0xAF, pct // 2)
+        return {"ok": True, "volume": pct - pct % 2} if not err else {"error": err}
     return {"error": "reading the volume is not supported on Windows; set it instead"}
 
 
@@ -215,7 +227,7 @@ def _brightness_get() -> dict:
     if _has("brightnessctl"):
         rc, cur = _sh(["brightnessctl", "g"])
         rc2, mx = _sh(["brightnessctl", "m"])
-        if rc == 0 and rc2 == 0 and mx.strip().isdigit() and int(mx) > 0:
+        if rc == 0 and rc2 == 0 and cur.strip().isdigit() and mx.strip().isdigit() and int(mx) > 0:
             return {"brightness": round(100 * int(cur) / int(mx)), "via": "brightnessctl"}
     return {"error": "no brightness control found (a laptop panel is needed; desktop monitors usually have none)"}
 
@@ -250,11 +262,19 @@ def _dnd(on: bool, minutes: int) -> dict:
         return {"error": "kwriteconfig not found (Plasma's do-not-disturb timer lives in plasmanotifyrc)"}
     if on:
         until = _dt.datetime.now() + _dt.timedelta(minutes=minutes)
-        value = until.strftime("%Y,%m,%d,%H,%M,%S").replace(",0", ",")   # KConfig QDateTime: yyyy,M,d,h,m,s
-        rc, out = _sh([kw, "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", value])
+        value = f"{until.year},{until.month},{until.day},{until.hour},{until.minute},{until.second}"   # KConfig QDateTime
+        rc, out = _kwrite_notify(kw, ["--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", value])
         return {"ok": True, "until": until.strftime("%H:%M")} if rc == 0 else {"error": out.strip()[:200]}
-    rc, out = _sh([kw, "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--delete"])
+    rc, out = _kwrite_notify(kw, ["--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", "--delete"])
     return {"ok": True, "dnd": False} if rc == 0 else {"error": out.strip()[:200]}
+
+
+def _kwrite_notify(kw: str, args: list[str]) -> tuple[int, str]:
+    """kwriteconfig with --notify (Plasma only reloads plasmanotifyrc on a change notice); older builds lack the flag."""
+    rc, out = _sh([kw, "--notify", *args])
+    if rc != 0 and "notify" in out.lower():
+        rc, out = _sh([kw, *args])
+    return rc, out
 
 
 def _lock() -> dict:
@@ -315,10 +335,15 @@ def system_control(args: dict, **_: Any) -> dict:
         cur = _volume_get()
         if "error" in cur or cur.get("volume") is None:
             return cur if "error" in cur else {"error": "could not read the current volume"}
-        step = _clamp(value) if value is not None else 10
+        step = (_clamp(value) if value is not None else None) or 10
         return _volume_set(_clamp(cur["volume"] + (step if action == "volume_up" else -step)))
     if action in ("mute", "unmute"):
-        return _volume_windows("mute", None) if IS_WINDOWS else _mute("1" if action == "mute" else "0")
+        if IS_WINDOWS:
+            res = _volume_windows("mute", None)
+            if action == "unmute" and "ok" in res:
+                res["note"] = "Windows only has a mute toggle here: pressed it once; check the speaker icon"
+            return res
+        return _mute("1" if action == "mute" else "0")
     if action == "brightness_get":
         return _brightness_get()
     if action == "brightness_set":

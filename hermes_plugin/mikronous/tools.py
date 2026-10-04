@@ -106,13 +106,16 @@ def docs_search(args: dict, **_: Any) -> dict:
     if not query:
         return _err("query is required")
     if args.get("reindex"):
-        st = docs_index.reindex(force=False)
-        logger.info("docs reindex: %s", st)
+        try:
+            st = docs_index.reindex(force=False, embed_missing=docs_index.embed_enabled())
+            logger.info("docs reindex: %s", st)
+        except Exception as exc:  # noqa: BLE001 - a locked database must not kill the search
+            logger.warning("docs reindex failed: %s", exc)
     try:
         hits = docs_index.search(query, int(args.get("limit") or 8))
-    except Exception as exc:  # noqa: BLE001
+        info = docs_index.stats()
+    except Exception as exc:  # noqa: BLE001 - bad limit, locked database: an error result, never a traceback
         return _err(f"document index error: {exc}")
-    info = docs_index.stats()
     return {"count": len(hits), "results": hits, "indexed_files": info["files"], "dirs": info["dirs"],
             "next_step": "Call read_file on the most relevant path (use offset/limit for long files) before answering."}
 
@@ -275,7 +278,8 @@ def _on_session_end(**_: Any) -> None:
         if time.time() - _last_refresh < docs_index.STALE_SECONDS:
             return
         _last_refresh = time.time()
-    threading.Thread(target=lambda: docs_index.reindex(), name="mikronous-docs-reindex", daemon=True).start()
+    threading.Thread(target=lambda: docs_index.reindex(embed_missing=docs_index.embed_enabled()),
+                     name="mikronous-docs-reindex", daemon=True).start()
 
 
 # ----------------------------------------------------------------------------- registration

@@ -184,7 +184,8 @@ def _sync_vision_config(vision: bool, restart: bool = True) -> None:
         if restart:
             from mikronous_cli.platform import hermes_bin
             from mikronous_cli.paths import PROFILE
-            subprocess.run([hermes_bin(), "-p", PROFILE, "gateway", "restart"], capture_output=True, text=True, timeout=120)
+            subprocess.run([hermes_bin(), "-p", PROFILE, "gateway", "restart"], capture_output=True, text=True, timeout=120,
+                           input="y\ny\n")   # never block on a prompt
     except Exception as exc:  # noqa: BLE001 - the model still works; vision routing is a nicety
         print(f"(could not update the profile's vision setting: {exc})", file=sys.stderr)
 
@@ -217,7 +218,6 @@ def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | No
     if not _has_gpu(hw):
         fit.ngl = 0
     env.apply_fit(fit, meta, path, threads=_threads(hw), mmproj_path=mmproj_path)
-    _sync_vision_config(mmproj_path is not None, restart=not getattr(args, "no_restart", False))   # gateway restart so Hermes sends pixels
     if getattr(args, "kv", None):
         k, _, v = args.kv.partition("/")
         env["LLAMA_KV_K"], env["LLAMA_KV_V"] = k, (v or k)
@@ -229,8 +229,11 @@ def _finish_apply(meta: GGUFMeta, fit: Fit, repo: str | None, filename: str | No
     env.save()
     print(f"\nwrote {env.path}\n{env.summary()}\n")
     if getattr(args, "no_restart", False):
+        _sync_vision_config(mmproj_path is not None, restart=False)
         return 0
-    return 0 if apply_mod.restart_and_wait(env["LLAMA_PORT"]) else 1
+    ok = apply_mod.restart_and_wait(env["LLAMA_PORT"])
+    _sync_vision_config(mmproj_path is not None, restart=True)      # after the model is live: Hermes then sends pixels
+    return 0 if ok else 1
 
 
 def cmd_use(args) -> int:

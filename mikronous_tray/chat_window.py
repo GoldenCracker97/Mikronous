@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import html
-import threading
-
 import os
+import sys
+import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
@@ -45,30 +45,46 @@ class ChatWorker(QObject):
             except GatewayError:
                 pass
 
+    def _got_run_id(self, run_id: str | None) -> None:
+        self.run_id = run_id or None
+        if self.run_id:
+            self.started_run.emit(self.run_id)
+            if self._stop.is_set():              # CEASE came before the id was known: tell the gateway now
+                try:
+                    self.client.stop(self.run_id)
+                except GatewayError:
+                    pass
+
+    def _terminal(self, ev: RunEvent) -> None:
+        """A terminal event after CEASE is a cancellation whatever the gateway called it."""
+        if self._stop.is_set():
+            self.finished.emit("cancelled", str(ev.data.get("output") or "Stopped."))
+        else:
+            self._dispatch(ev)
+
     @Slot()
     def run(self) -> None:
         try:
             if self.image_paths:                 # images ride the session chat stream (the runs API is text-only)
                 for ev in self.client.session_chat_events(self.session_id, self.text, self.image_paths, should_stop=self._stop.is_set):
                     if ev.name == "run.started":
-                        self.run_id = str(ev.data.get("run_id") or "") or None
-                        if self.run_id:
-                            self.started_run.emit(self.run_id)
+                        self._got_run_id(str(ev.data.get("run_id") or ""))
                         continue
-                    self._dispatch(ev)
                     if ev.terminal:
+                        self._terminal(ev)
                         return
+                    self._dispatch(ev)
                 self.finished.emit("cancelled", "Stopped.")
                 return
-            self.run_id = self.client.start_run(self.text, self.session_id)
-            self.started_run.emit(self.run_id)
+            self._got_run_id(self.client.start_run(self.text, self.session_id))
             for ev in self.client.events(self.run_id, should_stop=self._stop.is_set):
-                self._dispatch(ev)
                 if ev.terminal:
+                    self._terminal(ev)
                     return
+                self._dispatch(ev)
             self.finished.emit("cancelled", "Stopped.")
         except GatewayError as exc:
-            self.finished.emit("failed", str(exc))
+            self.finished.emit("cancelled" if self._stop.is_set() else "failed", str(exc))
         except Exception as exc:  # noqa: BLE001
             self.finished.emit("failed", f"{exc.__class__.__name__}: {exc}")
 
@@ -173,6 +189,7 @@ class ChatWindow(QWidget):
         self._copy_next_answer = False
         self._quiet_question: str | None = None
         self._pending_images: list[str] = []
+        self._zombies: list[tuple[QThread, ChatWorker]] = []   # detached turns still winding down (ignored, then freed)
         self._recorder = None
         self._stt_thread: QThread | None = None
         self._speaker = None
@@ -224,7 +241,7 @@ class ChatWindow(QWidget):
         hl.addWidget(self.btn_chats)
         self.btn_settings = QPushButton("SETTINGS", objectName="hbtn")
         self.btn_settings.setToolTip("Settings (Ctrl+,)")
-        self.btn_settings.clicked.connect(self.open_settings)
+        self.btn_settings.clicked.connect(lambda: self.open_settings())
         hl.addWidget(self.btn_settings)
         self.btn_screen = QPushButton("SCREEN", objectName="hbtn")
         self.btn_screen.setToolTip("Capture a region of the screen and ask about it (Ctrl+Shift+S)")
@@ -328,13 +345,13 @@ class ChatWindow(QWidget):
         self.pane.set_current(self.session_id)
 
     def new_chat(self) -> None:
-        if self._worker:
-            self.stop()
+        self._detach_worker()
         from .hermes_client import new_session_id
         self.session_id = new_session_id()
         settings.save(session_id=self.session_id)
         self.messages = []
         self._streaming = None
+        self._pending_images = []
         self._render()
         self._set_status(CANT["new"])
         self.pane.set_current(self.session_id)
@@ -357,12 +374,12 @@ class ChatWindow(QWidget):
         """Switch the slate to an earlier chat; history comes from the gateway."""
         if not session_id or session_id == self.session_id:
             return
-        if self._worker:
-            self.stop()
+        self._detach_worker()
         self.session_id = session_id
         settings.save(session_id=session_id)
         self.messages = []
         self._streaming = None
+        self._pending_images = []
         self._load_history()
         self._set_status(CANT["session_opened"])
         self.input.setFocus()
@@ -454,6 +471,10 @@ class ChatWindow(QWidget):
             return
         path = rec.stop()
         if not path:
+            try:
+                os.remove(rec.path)
+            except OSError:
+                pass
             self._set_status(CANT["heard_nothing"])
             return
         self._set_status(CANT["transcribing"])
@@ -508,8 +529,6 @@ class ChatWindow(QWidget):
         text = (text or "").strip()
         if not text:
             return
-        if self._worker:
-            self.stop()
         self.new_chat()
         self._quiet_question = text
         self._add("user", text)
@@ -622,10 +641,11 @@ class ChatWindow(QWidget):
             return
         images, self._pending_images = self._pending_images, []
         self.input.clear()
-        self._add("user", (f"[{len(images)} screen capture{'s' if len(images) > 1 else ''} attached]\n" if images else "") + text)
+        marker = f"[{len(images)} screen capture{'s' if len(images) > 1 else ''} attached]" if images else ""
+        self._add("user", (marker + "\n" if marker else "") + text)
         self._streaming = ""
         self._schedule_render()
-        self._start_worker(text, images)
+        self._start_worker((marker + " " if marker else "") + text, images)
 
     # ------------------------------------------------------------------ screen
     def capture_screen(self) -> None:
@@ -638,7 +658,9 @@ class ChatWindow(QWidget):
 
     def _capture_now(self, reshow: bool) -> None:
         from . import screen
-        path = screen.capture(region=True)
+        screen.start_capture(self, True, self._capture_done)   # Spectacle runs as a QProcess; the tray stays responsive
+
+    def _capture_done(self, path) -> None:
         self.show_window()
         if path is None:
             self._set_status(CANT["screen_cancelled"])
@@ -657,23 +679,69 @@ class ChatWindow(QWidget):
         self.input.setFocus()
 
     def _start_worker(self, text: str, images: list[str] | None = None) -> None:
-        self._thread = QThread(self)
-        self._worker = ChatWorker(self.client, text, self.session_id, images)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.delta.connect(self._on_delta)
-        self._worker.interim.connect(self._on_interim)
-        self._worker.tool_started.connect(self._on_tool_started)
-        self._worker.tool_completed.connect(self._on_tool_completed)
-        self._worker.approval.connect(self._on_approval)
-        self._worker.finished.connect(self._on_finished)
-        self._worker.finished.connect(self._thread.quit)
-        self._thread.finished.connect(self._cleanup_worker)
+        self._detach_worker()                     # never two attached turns; an old one winds down ignored
+        thread = QThread(self)
+        worker = ChatWorker(self.client, text, self.session_id, images)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        # Signals cross threads through a guard QObject that lives on the GUI thread (queued delivery) and
+        # drops everything from a turn that is no longer the current one.
+        guard = _WorkerGuard(self, worker, thread)
+        worker.delta.connect(guard.delta)
+        worker.interim.connect(guard.interim)
+        worker.tool_started.connect(guard.tool_started)
+        worker.tool_completed.connect(guard.tool_completed)
+        worker.approval.connect(guard.approval)
+        worker.finished.connect(guard.finished)
+        worker.finished.connect(thread.quit)
+        thread.finished.connect(guard.thread_finished)
+        self._thread, self._worker = thread, worker
         self.send_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self._set_dot("thinking")
         self._set_status(CANT["thinking"])
-        self._thread.start()
+        thread.start()
+
+    def _detach_worker(self) -> None:
+        """Forget the running turn (its gateway run is asked to stop); it finishes in the background, ignored."""
+        if self._worker is None:
+            return
+        self._worker.request_stop()
+        self._zombies.append((self._thread, self._worker))
+        self._thread = self._worker = None
+        self._streaming = None
+        self._copy_next_answer = False
+        self._quiet_question = None
+        self.approval_card.hide()
+        self._pending_approval = None
+        self.send_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self._stall_timer.stop()
+        self._set_dot("idle")
+
+    def live_threads(self) -> list[QThread]:
+        """Threads the tray must wait for before quitting."""
+        out = [t for t, _w in self._zombies] + [t for t in (self._thread, self._stt_thread, self._settings_thread) if t is not None]
+        return [t for t in out if t.isRunning()]
+
+    def stop_all(self) -> None:
+        """Quit path: stop recording, cancel the turn, and give every thread a moment to end."""
+        if self._recorder is not None:
+            rec, self._recorder = self._recorder, None
+            path = rec.stop()
+            if path:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+        if self._speaker is not None:
+            self._speaker.stop()
+        for w in [self._worker] + [w for _t, w in self._zombies]:
+            if w is not None:
+                w.request_stop()
+        for t in self.live_threads():
+            t.quit()
+            t.wait(3000)
 
     @Slot()
     def stop(self) -> None:
@@ -683,10 +751,11 @@ class ChatWindow(QWidget):
             self._worker.request_stop()
             self._set_status(CANT["stopping"])
 
-    @Slot()
-    def _cleanup_worker(self) -> None:
-        if self._thread:
-            self._thread.deleteLater()
+    def _cleanup_worker(self, thread: QThread, worker: "ChatWorker") -> None:
+        thread.deleteLater()                      # the worker is Python-owned and goes with its last reference
+        self._zombies = [(t, w) for t, w in self._zombies if w is not worker]
+        if worker is not self._worker:
+            return
         self._thread = None
         self._worker = None
         self.send_btn.setEnabled(True)
@@ -738,6 +807,7 @@ class ChatWindow(QWidget):
         self.approval_card.show()
         self._set_dot("approval")
         self._set_status(CANT["approval"])
+        self._stall_timer.stop()                  # waiting on the user is not a stall
         self.show_window()
 
     def _resolve_approval(self, choice: str) -> None:
@@ -800,7 +870,9 @@ class ChatWindow(QWidget):
     # ------------------------------------------------------------------ misc
     def _set_status(self, text: str) -> None:
         self.status.setText(text)
-        if self._worker is not None and text and text != CANT["stall"]:
+        if self._pending_approval is not None:
+            self._stall_timer.stop()
+        elif self._worker is not None and text and text != CANT["stall"]:
             self._stall_timer.start()      # any progress resets the stall hint
         elif self._worker is None:
             self._stall_timer.stop()
@@ -825,6 +897,53 @@ class ChatWindow(QWidget):
         settings.save(window={"width": self.width(), "height": self.height()})
         e.ignore()
         self.hide_window()
+
+
+class _WorkerGuard(QObject):
+    """GUI-thread receiver for one ChatWorker: forwards its signals to the window only while that worker is
+    the window's current turn, then frees itself when the thread ends."""
+
+    def __init__(self, window: "ChatWindow", worker: ChatWorker, thread: QThread):
+        super().__init__(window)
+        self.window, self.worker, self.thread = window, worker, thread
+
+    def _live(self) -> bool:
+        return self.worker is self.window._worker
+
+    @Slot(str)
+    def delta(self, d: str) -> None:
+        if self._live():
+            self.window._on_delta(d)
+
+    @Slot(str)
+    def interim(self, t: str) -> None:
+        if self._live():
+            self.window._on_interim(t)
+
+    @Slot(str, str)
+    def tool_started(self, n: str, p: str) -> None:
+        if self._live():
+            self.window._on_tool_started(n, p)
+
+    @Slot(str, bool, str)
+    def tool_completed(self, n: str, e: bool, p: str) -> None:
+        if self._live():
+            self.window._on_tool_completed(n, e, p)
+
+    @Slot(dict)
+    def approval(self, d: dict) -> None:
+        if self._live():
+            self.window._on_approval(d)
+
+    @Slot(str, str)
+    def finished(self, s: str, t: str) -> None:
+        if self._live():
+            self.window._on_finished(s, t)
+
+    @Slot()
+    def thread_finished(self) -> None:
+        self.window._cleanup_worker(self.thread, self.worker)
+        self.deleteLater()
 
 
 class _Transcribe(QObject):

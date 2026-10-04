@@ -100,8 +100,11 @@ class KRunnerService:
 
     def stop(self) -> None:
         loop, bus = self._loop, self._bus
-        if loop and bus:
-            loop.call_soon_threadsafe(bus.disconnect)
+        if loop and bus and not loop.is_closed():
+            try:
+                loop.call_soon_threadsafe(bus.disconnect)
+            except RuntimeError:
+                pass
 
     def _serve(self) -> None:
         import asyncio
@@ -150,4 +153,8 @@ class KRunnerService:
             self.error = f"{exc.__class__.__name__}: {exc}"
         finally:
             self.ok = False
+            if self.error:
+                import sys
+                print(f"mikronous-tray: KRunner integration stopped: {self.error}", file=sys.stderr)
+            self._bus = None
             self._loop.close()

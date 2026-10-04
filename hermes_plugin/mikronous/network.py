@@ -8,6 +8,7 @@ of a variable in the profile's ``.env`` and are never included in results.
 from __future__ import annotations
 
 import concurrent.futures
+import http.client
 import ipaddress
 import json
 import os
@@ -158,7 +159,7 @@ def host_check(args: dict, **_: Any) -> dict:
         return {"error": "ports must be a list of integers"}
     try:
         ip = socket.gethostbyname(host)
-    except socket.gaierror:
+    except (socket.gaierror, UnicodeError, OSError):
         return {"host": host, "resolved": False, "reachable": False, "error": "name does not resolve"}
     rtt = _ping(ip, 1.5)
     open_ports, closed = [], []
@@ -214,6 +215,23 @@ def _secret(name: str) -> str:
     return os.environ.get(name, "")
 
 
+class _SameHostAuthRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but drop the credential header when the redirect leaves the original host."""
+
+    def __init__(self, auth_header: str | None):
+        super().__init__()
+        self.auth_header = auth_header
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401 - urllib hook
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and self.auth_header:
+            if (urllib.parse.urlparse(newurl).hostname or "").lower() != (urllib.parse.urlparse(req.full_url).hostname or "").lower():
+                for key in list(new.headers) + list(new.unredirected_hdrs):
+                    if key.lower() == self.auth_header.lower():
+                        new.remove_header(key)
+        return new
+
+
 def http_request(args: dict, **_: Any) -> dict:
     method = str(args.get("method") or "GET").upper()
     url = str(args.get("url") or "").strip()
@@ -224,7 +242,15 @@ def http_request(args: dict, **_: Any) -> dict:
         return {"error": "only http:// and https:// URLs are allowed"}
     if method not in _SAFE_METHODS and not args.get("confirm"):
         return {"error": f"{method} changes something on {parsed.netloc}. Ask the user to confirm, then call again with confirm=true."}
-    headers = {str(k): str(v) for k, v in (args.get("headers") or {}).items()}
+    raw_headers = args.get("headers") or {}
+    if isinstance(raw_headers, str):
+        try:
+            raw_headers = json.loads(raw_headers)
+        except ValueError:
+            return {"error": "headers must be an object of name: value"}
+    if not isinstance(raw_headers, dict):
+        return {"error": "headers must be an object of name: value"}
+    headers = {str(k): str(v) for k, v in raw_headers.items()}
     headers.setdefault("User-Agent", "Mikronous/0.1 (local desktop assistant)")
     auth_env = str(args.get("auth_env") or "").strip()
     secret = ""
@@ -233,23 +259,33 @@ def http_request(args: dict, **_: Any) -> dict:
         if not secret:
             return {"error": f"{auth_env} is not set in the profile .env; add it there (never paste the value into chat)"}
         scheme = str(args.get("auth_scheme") if args.get("auth_scheme") is not None else "Bearer").strip()
-        headers[str(args.get("auth_header") or "Authorization")] = f"{scheme} {secret}".strip()
+        auth_header = str(args.get("auth_header") or "Authorization")
+        headers[auth_header] = f"{scheme} {secret}".strip()
     data: bytes | None = None
     if args.get("json") is not None:
         data = json.dumps(args["json"]).encode("utf-8")
         headers.setdefault("Content-Type", "application/json")
     elif args.get("body") is not None:
         data = str(args["body"]).encode("utf-8")
-    timeout = float(args.get("timeout") or 30)
-    limit = int(args.get("char_limit") or 20000)
+    try:
+        timeout = float(args.get("timeout") or 30)
+        limit = int(args.get("char_limit") or 20000)
+    except (TypeError, ValueError):
+        return {"error": "timeout must be seconds (number) and char_limit an integer"}
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    # The key is for the host the user named: a redirect to another host must not carry it along.
+    opener = urllib.request.build_opener(_SameHostAuthRedirect(auth_header if secret else None))
     t0 = time.monotonic()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - the user named the URL
+        with opener.open(req, timeout=timeout) as resp:  # noqa: S310 - the user named the URL
             status, raw, rheaders = resp.status, resp.read(limit * 4 + 1), dict(resp.headers.items())
     except urllib.error.HTTPError as exc:
-        status, raw, rheaders = exc.code, exc.read(limit * 4 + 1), dict(exc.headers.items()) if exc.headers else {}
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+        try:
+            raw = exc.read(limit * 4 + 1)
+        except (OSError, ValueError, http.client.HTTPException):
+            raw = b""
+        status, rheaders = exc.code, dict(exc.headers.items()) if exc.headers else {}
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
         return {"error": f"request failed: {exc.__class__.__name__}: {getattr(exc, 'reason', exc)}"}
     text = raw.decode("utf-8", "replace")
     if secret:  # the secret never appears in what the model sees, even if the server echoes it

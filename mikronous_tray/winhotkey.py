@@ -15,6 +15,17 @@ _VK = {"space": 0x20, "tab": 0x09, "enter": 0x0D, "return": 0x0D, "esc": 0x1B, "
        "home": 0x24, "end": 0x23, "insert": 0x2D, "delete": 0x2E, "pause": 0x13}
 
 
+def _vk_for_char(ch: str) -> int:
+    """Letters and digits map straight to their virtual-key codes; punctuation needs the keyboard layout."""
+    if ch.isalnum() and ch.isascii():
+        return ord(ch.upper())
+    if sys.platform == "win32":
+        res = ctypes.windll.user32.VkKeyScanW(ord(ch))
+        if res != -1:
+            return res & 0xFF
+    raise ValueError(f"cannot map key '{ch}' on this keyboard layout")
+
+
 def parse(spec: str) -> tuple[int, int]:
     mods, vk = MOD_NOREPEAT, 0
     for part in [p.strip().lower() for p in spec.split("+") if p.strip()]:
@@ -29,7 +40,7 @@ def parse(spec: str) -> tuple[int, int]:
         elif part in _VK:
             vk = _VK[part]
         elif len(part) == 1:
-            vk = ord(part.upper())
+            vk = _vk_for_char(part)
         elif part.startswith("f") and part[1:].isdigit():
             vk = 0x70 + int(part[1:]) - 1
         else:
@@ -52,9 +63,10 @@ class WinHotkey(QAbstractNativeEventFilter):
         except ValueError as exc:
             self.error = str(exc)
             return
-        self.ok = bool(ctypes.windll.user32.RegisterHotKey(None, self.hotkey_id, mods, vk))
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        self.ok = bool(user32.RegisterHotKey(None, self.hotkey_id, mods, vk))
         if not self.ok:
-            self.error = f"RegisterHotKey failed (code {ctypes.GetLastError()}); is the key already taken?"
+            self.error = f"RegisterHotKey failed (code {ctypes.get_last_error()}); is the key already taken?"
             return
         app.installNativeEventFilter(self)
 

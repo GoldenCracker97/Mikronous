@@ -62,7 +62,7 @@ class RoutineDialog(QDialog):
             self.prompt.setPlainText(str(job.get("prompt") or ""))
             self._skills = tuple(job.get("skills") or ())
         else:
-            self.preset.setCurrentIndex(max(0, [p.key for p in R.PRESETS].index(preset_key)))
+            self.preset.setCurrentIndex(max(0, self.preset.findData(preset_key)))
             self._apply_preset()
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -114,7 +114,7 @@ class RoutinesTab(QWidget):
         lay.addWidget(self.list, 1)
         row = QHBoxLayout()
         self.btn_new = QPushButton("NEW…")
-        self.btn_new.clicked.connect(self.new)
+        self.btn_new.clicked.connect(lambda: self.new())      # clicked(bool) must not become preset_key
         self.btn_edit = QPushButton("EDIT…")
         self.btn_edit.clicked.connect(self.edit)
         self.btn_pause = QPushButton("PAUSE")
@@ -140,6 +140,9 @@ class RoutinesTab(QWidget):
         self._fetch.start()
 
     def _populate(self, jobs: list) -> None:
+        if self._fetch is not None:
+            self._fetch.deleteLater()
+            self._fetch = None
         self.jobs = [j for j in jobs if R.is_routine(j)]
         self.list.clear()
         for j in self.jobs:

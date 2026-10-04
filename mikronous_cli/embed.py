@@ -55,11 +55,6 @@ def _write_env(values: dict[str, str]) -> None:
     EMBED_ENV.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _server() -> dict:
-    from mikronous_model import runner
-    return runner.server("embed")
-
-
 def cmd_on() -> int:
     from mikronous_model import apply as apply_mod
     from mikronous_model import runner
@@ -68,11 +63,18 @@ def cmd_on() -> int:
     if not server:
         print("llama.env has no LLAMA_SERVER; run the installer (or scripts/install-llama.sh) first", file=sys.stderr)
         return 1
-    repo, filename, _size = apply_mod.resolve_hf(f"hf:{REPO}", FILE_HINT)
-    path = apply_mod.download(repo, filename)
+    from pathlib import Path
     values = env()
-    values.update({"EMBED_ENABLED": "1", "EMBED_SERVER": server, "EMBED_MODEL": str(path)})
-    _write_env(values)
+    path = Path(values.get("EMBED_MODEL") or "")
+    if not path.is_file():                       # first time (or the file was removed): fetch the model
+        try:
+            repo, filename, _size = apply_mod.resolve_hf(f"hf:{REPO}", FILE_HINT)
+            path = apply_mod.download(repo, filename)
+        except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+            print(f"could not fetch the embedding model ({exc}); check the network and retry `mik embed on`", file=sys.stderr)
+            return 1
+    values.update({"EMBED_ENABLED": "0", "EMBED_SERVER": server, "EMBED_MODEL": str(path)})
+    _write_env(values)                            # enabled only once the server answers (below)
     print(f"wrote {EMBED_ENV}")
     if not IS_WINDOWS:
         unit_dir = __import__("pathlib").Path("~/.config/systemd/user").expanduser()
@@ -93,6 +95,8 @@ def cmd_on() -> int:
     if not answers():
         print(f"embedding server did not come up on {url()}; see: {runner.restart_hint('embed')}", file=sys.stderr)
         return 1
+    values["EMBED_ENABLED"] = "1"
+    _write_env(values)
     print(f"embedding server up at {url()}; embedding the document index (first pass can take a few minutes)")
     from . import docs
     return docs.main(["reindex", "--embed"])

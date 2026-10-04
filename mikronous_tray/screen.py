@@ -25,7 +25,8 @@ def screens_dir() -> Path:
 
 
 def new_path() -> Path:
-    return screens_dir() / time.strftime("screen-%Y%m%d-%H%M%S.png")
+    ms = int((time.time() % 1) * 1000)
+    return screens_dir() / (time.strftime("screen-%Y%m%d-%H%M%S") + f"-{ms:03d}.png")
 
 
 def prune(keep: int = KEEP) -> None:
@@ -56,6 +57,32 @@ def capture(region: bool = True) -> Path | None:
         if region:
             return None                         # the user pressed Esc in the region picker
     return _qt_grab(out)
+
+
+def start_capture(parent, region: bool, on_done) -> None:
+    """Non-blocking capture: Spectacle as a QProcess (the tray keeps serving reminders, KRunner and CEASE while
+    the user draws the region); ``on_done(path | None)`` runs on the Qt thread. Falls back to :func:`capture`."""
+    if not spectacle_available():
+        on_done(capture(region))
+        return
+    from PySide6.QtCore import QProcess
+    out = new_path()
+    proc = QProcess(parent)
+
+    def finished(_code, _status):
+        proc.deleteLater()
+        if out.exists() and out.stat().st_size > 0:
+            prune()
+            on_done(out)
+        elif region:
+            on_done(None)                        # Esc in the region picker
+        else:
+            on_done(_qt_grab(out))
+    proc.finished.connect(finished)
+    proc.start("spectacle", ["-b", "-n", "-r" if region else "-f", "-o", str(out)])
+    if not proc.waitForStarted(3000):
+        proc.deleteLater()
+        on_done(_qt_grab(out))
 
 
 def _qt_grab(out: Path) -> Path | None:

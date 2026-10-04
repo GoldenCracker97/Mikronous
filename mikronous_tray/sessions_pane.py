@@ -107,6 +107,9 @@ class SessionsPane(QFrame):
         self._fetcher.start()
 
     def _populate(self, rows: list) -> None:
+        if self._fetcher is not None:
+            self._fetcher.deleteLater()
+            self._fetcher = None
         self.list.clear()
         for s in rows:
             sid = str(s.get("id") or "")

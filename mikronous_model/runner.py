@@ -40,7 +40,7 @@ def embed_command_line(env: dict[str, str]) -> list[str]:
     ctx = env.get("EMBED_CTX", "2048")
     return [env.get("EMBED_SERVER", "llama-server"), "--host", "127.0.0.1", "--port", env.get("EMBED_PORT", "8082"),
             "-m", env.get("EMBED_MODEL", ""), "--alias", "mikronous-embed", "--embeddings", "--pooling", env.get("EMBED_POOLING", "mean"),
-            "-c", ctx, "-ub", ctx, "-b", ctx, "-ngl", "0", "-t", env.get("EMBED_THREADS", "4")]
+            "-c", ctx, "-ub", ctx, "-b", ctx, "-ngl", "0", "-dev", "none", "-t", env.get("EMBED_THREADS", "4")]
 
 
 def command_line(env: dict[str, str] | None = None) -> list[str]:

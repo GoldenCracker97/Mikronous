@@ -83,3 +83,43 @@ def test_http_request_write_needs_confirm(server):
     assert "confirm" in denied["error"]
     ok = network.http_request({"method": "POST", "url": f"{server}/items", "json": {"a": 1}, "confirm": True})
     assert ok["status"] == 201 and ok["json"]["got"] == {"a": 1}
+
+
+def test_http_request_drops_auth_on_cross_host_redirect(monkeypatch):
+    import threading
+    got = {}
+
+    class Target(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            got["auth"] = self.headers.get("Authorization")
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        def log_message(self, *a): pass
+
+    target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Target)
+    tport = target.server_address[1]
+
+    class Hop(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            host = "localhost" if self.path == "/other" else "127.0.0.1"      # a different host name = different netloc
+            self.send_response(302); self.send_header("Location", f"http://{host}:{tport}/x"); self.end_headers()
+        def log_message(self, *a): pass
+
+    hop = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Hop)
+    for srv in (target, hop):
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setenv("T_TOKEN", "s3cr3t")
+    try:
+        res = network.http_request({"url": f"http://127.0.0.1:{hop.server_address[1]}/other", "auth_env": "T_TOKEN"})
+        assert res["ok"] and got["auth"] is None                 # 127.0.0.1 -> localhost: header stripped
+        res = network.http_request({"url": f"http://127.0.0.1:{hop.server_address[1]}/same", "auth_env": "T_TOKEN"})
+        assert res["ok"] and got["auth"] == "Bearer s3cr3t"      # same host: header kept
+    finally:
+        target.shutdown(); hop.shutdown()
+
+
+def test_http_request_bad_inputs_return_errors():
+    assert "error" in network.http_request({"url": "http://127.0.0.1:9/", "headers": "not json"})
+    assert "error" in network.http_request({"url": "http://127.0.0.1:9/", "headers": ["a"]})
+    assert "error" in network.http_request({"url": "http://127.0.0.1:9/", "timeout": "10s"})
+    assert network.host_check({"host": "x" * 70 + ".invalid"})["resolved"] is False

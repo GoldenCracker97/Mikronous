@@ -51,6 +51,16 @@ All notable changes to Mikronous are recorded here. The format follows
 - VOX failed with `open() got an unexpected keyword argument 'metadata_errors'` on older PyAV: the recording is now
   decoded with `wave`/numpy and handed to faster-whisper as samples.
 - `mik model sync-config` also sets the per-model `supports_vision` flag; `mik doctor` has a `vision` row.
+- Review pass: the UPDATE offer crashed on a non-existent dialog button; Settings → Routines → NEW… crashed (Qt's
+  clicked flag landed in the preset argument); `mik docs` and `mik embed on` failed on a relative import; CEASE ended
+  every turn in MALFUNCTION; a new turn started while one streamed could abort the tray and bled into the new chat;
+  captures leaked into the next chat; the installer's "shortcut already set" check never matched (every run rewrote
+  the keys); `mik update` could drop the PySide6/voice extras; `MIKRONOUS_VOICE` clashed with the persona level
+  (input switch is now `MIKRONOUS_VOICE_INPUT`); `http_request` forwarded the key on cross-host redirects and could
+  raise on bad inputs; Windows media/volume keys typed characters instead of pressing keys; do-not-disturb changes
+  were not picked up by Plasma; Spectacle froze the tray while picking a region; `mik embed on` enabled semantic
+  search before the server answered; vision flag sync on Windows `mik update`; several Windows path fixes in the
+  document index.
 
 ## [0.1.1] - 2026-10-03
 

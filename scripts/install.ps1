@@ -249,6 +249,9 @@ if (-not $NoModel) {
 }
 
 # ---------------------------------------------------------------------------
+# Keep the profile's vision flag in step with the loaded model (config.yaml was just rewritten from the repo).
+if ($Mik) { try { & $Mik model sync-config --no-restart | Out-Null } catch { Write-Host "(vision flag sync skipped: $($_.Exception.Message))" } }
+
 Step "Hermes gateway (API server + cron) as a scheduled task"
 # Standalone per-profile gateway (gateway.standalone: true in config.yaml). Give it its own port if the
 # default profile's gateway owns 8642.

@@ -447,7 +447,7 @@ def test_screen_capture_and_image_turn(app, tmp_path, monkeypatch):
     w.send()
     assert pump(app, lambda: w._worker is None, 15)
     app.processEvents()
-    assert fc.image_turn == (w.session_id, "What's on my screen? Which app?", [str(path)])
+    assert fc.image_turn == (w.session_id, "[1 screen capture attached] What's on my screen? Which app?", [str(path)])
     assert w._pending_images == [] and any(m["role"] == "user" and m["text"].startswith("[1 screen capture attached]") for m in w.messages)
     assert w.messages[-1]["text"] == "A terminal window."
 
@@ -463,3 +463,107 @@ def test_screen_capture_without_vision_does_not_attach(app, tmp_path, monkeypatc
     w._capture_now(False)
     assert w._pending_images == [] and w.input.toPlainText() == ""
     assert any(m["role"] == "system" and "recommend --vision" in m["text"] for m in w.messages)
+
+
+class SlowClient(FakeClient):
+    """events() streams until the caller asks it to stop (honours should_stop like the real client)."""
+
+    def __init__(self):
+        super().__init__()
+        self.release = {}          # text -> threading.Event that lets the turn finish
+
+    def start_run(self, text, sid):
+        return "run-" + text
+
+    def events(self, run_id, should_stop=None):
+        import threading
+        text = run_id[4:]
+        ev = self.release.setdefault(text, threading.Event())
+        yield RunEvent("message.delta", {"delta": f"answer to {text} "})
+        for _ in range(400):
+            if should_stop and should_stop():
+                return                                   # like hermes_client: no terminal event after CEASE
+            if ev.is_set():
+                yield RunEvent("run.completed", {"output": f"answer to {text}"})
+                return
+            time.sleep(0.02)
+        yield RunEvent("run.failed", {"error": "test timeout"})
+
+
+def test_cease_shows_interrupted_and_stops_the_run(app):
+    from mikronous_tray.chat_window import ChatWindow
+    fc = SlowClient()
+    w = ChatWindow(fc)
+    w.input.setPlainText("first")
+    w.send()
+    assert pump(app, lambda: "answer to first" in (w._streaming or ""), 5)
+    w.stop()
+    assert pump(app, lambda: w._worker is None, 10)
+    app.processEvents()
+    txt = w.view.toPlainText()
+    assert "RITE INTERRUPTED" in txt and "MALFUNCTION" not in txt and fc.stopped is True
+    assert w.send_btn.isEnabled() and not w.stop_btn.isEnabled()
+
+
+def test_new_turn_while_one_streams_detaches_the_old(app):
+    from mikronous_tray.chat_window import ChatWindow
+    fc = SlowClient()
+    w = ChatWindow(fc)
+    w.input.setPlainText("first")
+    w.send()
+    assert pump(app, lambda: "answer to first" in (w._streaming or ""), 5)
+    w.ask_quietly("second")                      # new chat + new worker while the first still runs
+    assert len(w._zombies) == 1 and w._worker is not None and w._worker.text == "second"
+    import threading
+    fc.release.setdefault("second", threading.Event()).set()
+    assert pump(app, lambda: w._worker is None and not w._zombies, 15)
+    app.processEvents()
+    texts = [m["text"] for m in w.messages]
+    assert "second" in texts and "answer to second" in texts
+    assert not any("first" in t or "INTERRUPTED" in t for t in texts)      # the detached turn never touched this chat
+
+
+def test_new_chat_clears_pending_captures(app):
+    from mikronous_tray.chat_window import ChatWindow
+    w = ChatWindow(FakeClient())
+    w._pending_images = ["/tmp/x.png"]
+    w.new_chat()
+    assert w._pending_images == []
+
+
+def test_routines_new_button_click_opens_dialog(app):
+    from mikronous_tray import routines_tab
+    from mikronous_tray.routines_tab import RoutinesTab
+    created = []
+
+    class C:
+        def list_jobs(self, include_disabled=True): return []
+        def create_job(self, name, schedule, prompt, deliver="mikronous", skills=None):
+            created.append(name); return {"id": "n"}
+    tab = RoutinesTab(C())
+    monkey = routines_tab.RoutineDialog.exec
+    routines_tab.RoutineDialog.exec = lambda self: 1
+    try:
+        tab.btn_new.click()                      # clicked(bool) used to land in preset_key and raise
+    finally:
+        routines_tab.RoutineDialog.exec = monkey
+    assert created == ["Morning briefing"]
+
+
+def test_offer_update_uses_real_buttons(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from mikronous_tray.app import TrayApp
+    from mikronous_tray.chat_window import ChatWindow
+    w = ChatWindow(FakeClient())
+    ran = []
+
+    class Dummy:
+        window = w
+        def _update(self): ran.append(1)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
+    TrayApp._offer_update(Dummy(), {"behind": 2, "commits": ["abc one", "def two"]})
+    assert ran == [1]
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.No)
+    TrayApp._offer_update(Dummy(), {"behind": 1, "commits": ["abc one"]})
+    assert ran == [1]
+    w.hide()

@@ -23,7 +23,9 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from ._paths import conf_dir as _conf_dir
 from ._paths import data_dir as _data_dir
+from ._paths import hermes_home as _hermes_home
 
 DATA_DIR = _data_dir()
 DB_PATH = DATA_DIR / "docs.sqlite"
@@ -44,7 +46,7 @@ EMBED_BATCH = 16
 def docs_dirs() -> list[Path]:
     raw = os.environ.get("MIKRONOUS_DOCS_DIRS") or _env_from_profile("MIKRONOUS_DOCS_DIRS") or "~/Documents"
     out = []
-    for part in raw.split(":"):
+    for part in raw.split(os.pathsep):          # ':' on Linux, ';' on Windows (drive letters contain ':')
         p = Path(part.strip()).expanduser()
         if part.strip() and p.is_dir():
             out.append(p)
@@ -52,7 +54,7 @@ def docs_dirs() -> list[Path]:
 
 
 def _env_from_profile(key: str) -> str:
-    env_file = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+    env_file = _hermes_home()
     for candidate in (env_file / ".env", env_file / "profiles" / "mikronous" / ".env"):
         try:
             for line in candidate.read_text(encoding="utf-8").splitlines():
@@ -76,7 +78,7 @@ def _db() -> sqlite3.Connection:
 # ----------------------------------------------------------------------------- embeddings (optional)
 def _embed_env() -> dict[str, str]:
     """embed.env written by `mik embed on` (same conf dir as llama.env); {} when semantic search is off."""
-    conf = Path(os.environ.get("LOCALAPPDATA", "")) / "mikronous" if sys.platform == "win32" else Path("~/.config/mikronous").expanduser()
+    conf = _conf_dir()
     out: dict[str, str] = {}
     try:
         for line in (conf / "embed.env").read_text(encoding="utf-8").splitlines():

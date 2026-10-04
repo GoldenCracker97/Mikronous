@@ -67,17 +67,22 @@ class TrayApp(QObject):
         app.setQuitOnLastWindowClosed(False)
         app.setApplicationName("Mikronous")
         app.setDesktopFileName("mikronous")
+        # Single instance first: own the control socket before any slow work, so two launches that race
+        # (autostart + Meta+Space) cannot both come up. A live tray answers; a stale socket is replaced.
+        self.control = QLocalServer(self)
+        if not self.control.listen(settings.CONTROL_SERVER):
+            if send_control("show"):
+                raise SystemExit(0)
+            QLocalServer.removeServer(settings.CONTROL_SERVER)
+            self.control.listen(settings.CONTROL_SERVER)
+        self.control.newConnection.connect(self._control_conn)
+
         self.client = HermesClient()
         self.window = ChatWindow(self.client)
         from . import theme
         app.setWindowIcon(theme.qicon("color"))
         self.window.setWindowIcon(theme.qicon("color"))
         self._litany_pending = True
-
-        self.control = QLocalServer(self)
-        QLocalServer.removeServer(settings.CONTROL_SERVER)
-        self.control.listen(settings.CONTROL_SERVER)
-        self.control.newConnection.connect(self._control_conn)
 
         self.inbox = InboxServer(self)
         if not self.inbox.start():
@@ -195,6 +200,7 @@ class TrayApp(QObject):
             self.window.set_update_state("checking")
         self._checker = UpdateChecker(self)
         self._checker.result.connect(self._update_checked)
+        self._checker.finished.connect(self._checker.deleteLater)
         self._checker.start()
 
     def _update_checked(self, st: dict) -> None:
@@ -228,7 +234,8 @@ class TrayApp(QObject):
         box = QMessageBox(self.window)
         box.setWindowTitle("Mikronous update")
         box.setText(f"{st['behind']} new commit(s) on GitHub:\n{lines}{more}\n\nPull, re-install and restart the tray now?")
-        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Later)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.button(QMessageBox.No).setText("LATER")
         box.setDefaultButton(QMessageBox.Yes)
         box.setStyleSheet(self.window.styleSheet())
         self.window.show_window()
@@ -356,7 +363,9 @@ class TrayApp(QObject):
                 hk.unregister()
         if self.krunner:
             self.krunner.stop()
-        self.window.stop()
+        self.window.stop_all()                    # recorder, turn, and every worker thread
+        if self._checker is not None and self._checker.isRunning():
+            self._checker.wait(3000)
         if self.model.unload_on_quit():
             self.model.unload()          # frees the VRAM; MIKRONOUS_KEEP_MODEL=1 keeps it resident
         self.inbox.stop()

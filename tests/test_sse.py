@@ -64,3 +64,55 @@ def test_session_chat_creates_missing_session_and_retries():
     assert sum(1 for _m, p, _b in seen if p.endswith("/chat/stream")) == 2
     first_body = next(b for m, p, b in seen if p.endswith("/chat/stream"))
     assert first_body["message"][0] == {"type": "input_text", "text": "What is this?"}
+
+
+def _mock_client(handler):
+    import httpx
+    from mikronous_tray.hermes_client import HermesClient
+    c = HermesClient("http://gw/v1", "k")
+    tr = httpx.MockTransport(handler)
+    c._client = httpx.Client(transport=tr, headers={"Authorization": "Bearer k"})
+    c._control = httpx.Client(transport=tr, headers={"Authorization": "Bearer k"})
+    return c
+
+
+def test_events_cease_yields_cancelled_without_polling():
+    import httpx
+    seen = []
+
+    def handler(req):
+        seen.append((req.method, req.url.path))
+        if req.url.path.endswith("/events"):
+            body = 'data: {"event": "message.delta", "delta": "a", "seq": 1}\n\ndata: {"event": "message.delta", "delta": "b", "seq": 2}\n\n'
+            return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+        return httpx.Response(200, json={"status": "stopping"})
+    c = _mock_client(handler)
+    flag = {"stop": False}
+    out = []
+    for ev in c.events("run_1", should_stop=lambda: flag["stop"]):
+        out.append(ev.name)
+        flag["stop"] = True
+    assert out == ["message.delta", "run.cancelled"]
+    assert not any(p == "/v1/runs/run_1" for _m, p in seen)          # no status poll that would say "failed"
+
+
+def test_session_stream_real_shapes_keep_final_text_and_reason():
+    import httpx
+
+    def handler(req):
+        if req.url.path.endswith("/chat/stream"):
+            body = ('event: run.started\ndata: {"run_id": "r1"}\n\n'
+                    'event: assistant.delta\ndata: {"delta": "Hel"}\n\n'
+                    'event: assistant.completed\ndata: {"content": "Hello there."}\n\n'
+                    'event: run.completed\ndata: {"turn_exit_reason": "completed"}\n\n')
+            return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+        return httpx.Response(500)
+    evs = list(_mock_client(handler).session_chat_events("tray-x", "hi", []))
+    assert [e.name for e in evs] == ["run.started", "message.delta", "run.completed"]
+    assert evs[-1].data["output"] == "Hello there." and "error" not in evs[-1].data
+
+    def failing(req):
+        body = 'event: run.failed\ndata: {"turn_exit_reason": "provider_error"}\n\n'
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=body.encode())
+    evs = list(_mock_client(failing).session_chat_events("tray-x", "hi", []))
+    assert evs[-1].name == "run.failed" and evs[-1].data["error"] == "provider_error"

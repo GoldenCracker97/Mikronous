@@ -15,7 +15,8 @@ from mikronous_model import runner
 
 UNIT = runner.UNIT
 POLL_MS = 1500
-WAKE_TIMEOUT_MS = 180_000     # a 14B model on a slow disk can take a while
+SLOW_POLL_MS = 10_000
+WAKE_TIMEOUT_MS = 180_000     # a 14B model on a slow disk can take a while; after this we poll slowly, never give up
 
 
 class ModelService(QObject):
@@ -62,8 +63,16 @@ class ModelService(QObject):
             return
         if self.available() and self.state == "unloaded":
             runner.start()
+        if runner.IS_WINDOWS:                     # no service manager autostarts the embedding server there
+            try:
+                from mikronous_cli import embed
+                if embed.enabled() and not runner.is_running("embed"):
+                    runner.start("embed")
+            except Exception:  # noqa: BLE001 - optional feature
+                pass
         self._set("waking")
         self._waited = 0
+        self._poll.setInterval(POLL_MS)
         self._poll.start()
 
     def unload(self) -> None:
@@ -84,9 +93,12 @@ class ModelService(QObject):
         if self.answers():
             self._poll.stop()
             self._set("ready")
-        elif self._waited >= WAKE_TIMEOUT_MS or (self.available() and not self.unit_active()):
+        elif self.available() and not self.unit_active():
             self._poll.stop()
-            self._set("unloaded" if not self.unit_active() else "waking")
+            self._set("unloaded")
+        elif self._waited >= WAKE_TIMEOUT_MS and self._poll.interval() != SLOW_POLL_MS:
+            self._poll.setInterval(SLOW_POLL_MS)   # still loading (huge model, slow disk): keep looking, slowly
+            self._set("waking")
 
     def _set(self, new: str) -> None:
         if new != self.state:

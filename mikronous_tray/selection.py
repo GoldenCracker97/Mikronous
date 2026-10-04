@@ -75,6 +75,11 @@ def _grab_windows(cb) -> str:
     cb.setText("")
     VK_CONTROL, VK_C, KEYEVENTF_KEYUP = 0x11, 0x43, 0x0002
     user32 = ctypes.windll.user32
+    # The hotkey fires on key-down: wait until Ctrl/Alt/Shift/Win are released or the copy becomes Ctrl+Alt+Shift+C.
+    for _ in range(40):
+        if not any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C)):
+            break
+        time.sleep(0.025)
     user32.keybd_event(VK_CONTROL, 0, 0, 0)
     user32.keybd_event(VK_C, 0, 0, 0)
     user32.keybd_event(VK_C, 0, KEYEVENTF_KEYUP, 0)
